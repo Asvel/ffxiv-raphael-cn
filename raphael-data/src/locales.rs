@@ -8,6 +8,7 @@ pub enum Locale {
     DE,
     FR,
     JP,
+    CN,
 }
 
 impl std::fmt::Display for Locale {
@@ -17,6 +18,7 @@ impl std::fmt::Display for Locale {
             Self::DE => write!(f, "DE"),
             Self::FR => write!(f, "FR"),
             Self::JP => write!(f, "JP"),
+            Self::CN => write!(f, "CN"),
         }
     }
 }
@@ -24,6 +26,7 @@ impl std::fmt::Display for Locale {
 const JOB_NAMES_EN: [&str; 8] = ["CRP", "BSM", "ARM", "GSM", "LTW", "WVR", "ALC", "CUL"];
 const JOB_NAMES_DE: [&str; 8] = ["ZMR", "GRS", "PLA", "GLD", "GER", "WEB", "ALC", "GRM"];
 const JOB_NAMES_FR: [&str; 8] = ["MEN", "FRG", "ARM", "ORF", "TAN", "COU", "ALC", "CUI"];
+const JOB_NAMES_CN: [&str; 8] = ["刻木", "锻铁", "铸甲", "雕金", "制革", "裁衣", "炼金", "烹调"];
 
 pub fn get_job_name(job_id: u8, locale: Locale) -> &'static str {
     match locale {
@@ -31,6 +34,7 @@ pub fn get_job_name(job_id: u8, locale: Locale) -> &'static str {
         Locale::DE => JOB_NAMES_DE[job_id as usize],
         Locale::FR => JOB_NAMES_FR[job_id as usize],
         Locale::JP => JOB_NAMES_EN[job_id as usize], // JP job abbreviations are the same as EN
+        Locale::CN => JOB_NAMES_CN[job_id as usize],
     }
 }
 
@@ -38,6 +42,7 @@ pub static ITEM_NAMES_EN: phf::Map<u32, &str> = include!("../data/item_names_en.
 pub static ITEM_NAMES_DE: phf::Map<u32, &str> = include!("../data/item_names_de.rs");
 pub static ITEM_NAMES_FR: phf::Map<u32, &str> = include!("../data/item_names_fr.rs");
 pub static ITEM_NAMES_JP: phf::Map<u32, &str> = include!("../data/item_names_jp.rs");
+pub static ITEM_NAMES_CN: phf::Map<u32, &str> = include!("../data/item_names_cn.rs");
 
 pub fn get_item_name(item_id: u32, hq: bool, locale: Locale) -> Option<String> {
     let item_name = match locale {
@@ -45,6 +50,7 @@ pub fn get_item_name(item_id: u32, hq: bool, locale: Locale) -> Option<String> {
         Locale::DE => ITEM_NAMES_DE.get(&item_id)?.to_owned(),
         Locale::FR => ITEM_NAMES_FR.get(&item_id)?.to_owned(),
         Locale::JP => ITEM_NAMES_JP.get(&item_id)?.to_owned(),
+        Locale::CN => ITEM_NAMES_CN.get(&item_id)?.to_owned(),
     };
     let item_entry = ITEMS.get(&item_id);
     let always_collectable = item_entry.is_some_and(|item| item.always_collectable);
@@ -64,6 +70,7 @@ pub const fn action_name(action: Action, locale: Locale) -> &'static str {
         Locale::DE => action_name_de(action),
         Locale::FR => action_name_fr(action),
         Locale::JP => action_name_jp(action),
+        Locale::CN => action_name_cn(action),
     }
 }
 
@@ -208,5 +215,41 @@ const fn action_name_jp(action: Action) -> &'static str {
         Action::TrainedPerfection => "匠の絶技",
         Action::TrainedEye => "匠の早業",
         Action::QuickInnovation => "クイックイノベーション",
+    }
+}
+
+const fn action_name_cn(action: Action) -> &'static str {
+    match action {
+        Action::BasicSynthesis => "制作",
+        Action::BasicTouch => "加工",
+        Action::MasterMend => "精修",
+        Action::Observe => "观察",
+        Action::TricksOfTheTrade => "秘诀",
+        Action::WasteNot => "俭约",
+        Action::Veneration => "崇敬",
+        Action::StandardTouch => "中级加工",
+        Action::GreatStrides => "阔步",
+        Action::Innovation => "改革",
+        Action::WasteNot2 => "长期俭约",
+        Action::ByregotsBlessing => "比尔格的祝福",
+        Action::PreciseTouch => "集中加工",
+        Action::MuscleMemory => "坚信",
+        Action::CarefulSynthesis => "模范制作",
+        Action::Manipulation => "掌握",
+        Action::PrudentTouch => "俭约加工",
+        Action::AdvancedTouch => "上级加工",
+        Action::Reflect => "闲静",
+        Action::PreparatoryTouch => "坯料加工",
+        Action::Groundwork => "坯料制作",
+        Action::DelicateSynthesis => "精密制作",
+        Action::IntensiveSynthesis => "集中制作",
+        Action::HeartAndSoul => "专心致志",
+        Action::PrudentSynthesis => "俭约制作",
+        Action::TrainedFinesse => "工匠的神技",
+        Action::RefinedTouch => "精炼加工",
+        Action::ImmaculateMend => "巧夺天工",
+        Action::TrainedPerfection => "工匠的绝技",
+        Action::TrainedEye => "工匠的神速技巧",
+        Action::QuickInnovation => "快速改革",
     }
 }

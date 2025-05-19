@@ -80,14 +80,15 @@ impl MacroSolverApp {
             style.spacing.item_spacing = egui::vec2(8.0, 8.0);
         });
 
-        load_fonts(&cc.egui_ctx);
+        let locale = load(cc, "LOCALE", Locale::EN);
+        set_fonts(&cc.egui_ctx, locale);
 
         let latest_version = Arc::new(Mutex::new(semver::Version::new(0, 0, 0)));
         #[cfg(not(target_arch = "wasm32"))]
         fetch_latest_version(latest_version.clone());
 
         Self {
-            locale: load(cc, "LOCALE", Locale::EN),
+            locale,
             app_config,
             recipe_config: load(cc, "RECIPE_CONFIG", RecipeConfiguration::default()),
             custom_recipe_overrides_config: load(
@@ -125,8 +126,7 @@ impl MacroSolverApp {
 impl eframe::App for MacroSolverApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        #[cfg(target_arch = "wasm32")]
-        self.load_fonts_dyn(ctx);
+        set_fonts(ctx, self.locale);
 
         self.process_solver_events();
 
@@ -309,6 +309,11 @@ impl eframe::App for MacroSolverApp {
                                     &mut self.locale,
                                     Locale::JP,
                                     format!("{}", Locale::JP),
+                                );
+                                ui.selectable_value(
+                                    &mut self.locale,
+                                    Locale::CN,
+                                    format!("{}", Locale::CN),
                                 );
                             });
 
@@ -1070,81 +1075,48 @@ impl MacroSolverApp {
         #[cfg(target_arch = "wasm32")]
         return "⚠ EXPERIMENTAL FEATURE\nMay crash the solver due to reaching the 4GB memory limit of 32-bit web assembly, causing the UI to get stuck in the \"solving\" state indefinitely.";
     }
-
-    #[cfg(target_arch = "wasm32")]
-    fn load_fonts_dyn(&self, ctx: &egui::Context) {
-        if self.locale == Locale::JP {
-            let uri = concat!(
-                env!("BASE_URL"),
-                "/fonts/M_PLUS_1_Code/static/MPLUS1Code-Regular.ttf"
-            );
-            load_font_dyn(ctx, "MPLUS1Code-Regular", uri);
-        }
-    }
 }
 
-#[cfg(target_arch = "wasm32")]
-fn load_font_dyn(ctx: &egui::Context, font_name: &str, uri: &str) {
-    use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
-    let id = egui::Id::new(format!("{} loaded", uri));
-    if ctx.data(|data| data.get_temp(id).unwrap_or(false)) {
+fn set_fonts(ctx: &egui::Context, locale: Locale) {
+    let egui_id_current = egui::Id::new("font_locale");
+    if ctx.data(|data| data.get_temp(egui_id_current)) == Some(locale) {
         return;
     }
-    if let Ok(egui::load::BytesPoll::Ready { bytes, .. }) = ctx.try_load_bytes(uri) {
-        ctx.add_font(FontInsert::new(
-            font_name,
-            egui::FontData::from_owned(bytes.to_vec()),
-            vec![
-                InsertFontFamily {
-                    family: egui::FontFamily::Proportional,
-                    priority: FontPriority::Lowest,
-                },
-                InsertFontFamily {
-                    family: egui::FontFamily::Monospace,
-                    priority: FontPriority::Lowest,
-                },
-            ],
-        ));
-        ctx.data_mut(|data| *data.get_temp_mut_or_default(id) = true);
-        log::debug!("Font loaded: {}", font_name);
-    };
-}
+    ctx.data_mut(|data| data.insert_temp(egui_id_current, locale));
 
-fn load_fonts(ctx: &egui::Context) {
-    use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
-    ctx.add_font(FontInsert::new(
+    let mut fonts = egui::FontDefinitions::default();
+    let mut add_font = |font_name: &'static str, font_data: egui::FontData| {
+        fonts.font_data.insert(font_name.to_owned(), Arc::new(font_data));
+        for family in fonts.families.values_mut() {
+            family.insert(family.len() - 2, font_name.to_owned());
+        }
+    };
+    add_font(
         "XIV_Icon_Recreations",
         egui::FontData::from_static(include_bytes!(
             "../assets/fonts/XIV_Icon_Recreations/XIV_Icon_Recreations.ttf"
-        )),
-        vec![
-            InsertFontFamily {
-                family: egui::FontFamily::Proportional,
-                priority: FontPriority::Lowest,
-            },
-            InsertFontFamily {
-                family: egui::FontFamily::Monospace,
-                priority: FontPriority::Lowest,
-            },
-        ],
-    ));
-    #[cfg(not(target_arch = "wasm32"))]
-    ctx.add_font(FontInsert::new(
-        "MPLUS1Code-Regular",
-        egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/M_PLUS_1_Code/static/MPLUS1Code-Regular.ttf"
-        )),
-        vec![
-            InsertFontFamily {
-                family: egui::FontFamily::Proportional,
-                priority: FontPriority::Lowest,
-            },
-            InsertFontFamily {
-                family: egui::FontFamily::Monospace,
-                priority: FontPriority::Lowest,
-            },
-        ],
-    ));
+        ))
+    );
+    match locale {
+        Locale::JP => add_font(
+            "MPLUS1Code",
+            egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/M_PLUS_1_Code/subset.ttf"
+            ))
+        ),
+        Locale::CN => add_font(
+            "NotoSansSC",
+            egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/Noto_Sans_SC/subset.ttf"
+            ))
+            .tweak(egui::FontTweak {
+                baseline_offset_factor: -0.05,
+                ..Default::default()
+            })
+        ),
+        _ => (),
+    }
+    ctx.set_fonts(fonts);
 }
 
 fn spawn_solver(

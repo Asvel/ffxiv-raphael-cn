@@ -137,6 +137,21 @@ async fn main() {
     let mut item_names_fr = item_names_fr.await.unwrap();
     let mut item_names_jp = item_names_jp.await.unwrap();
 
+    let items_cn: Vec<_> = csv::Reader::from_path("../ffxiv-datamining-cn/Item.csv").unwrap()
+        .records().skip(2).collect();
+    let mut item_names_cn: Vec<_> = item_names_en.iter().map(|item_name| ItemName {
+        id: item_name.id,
+        name: 'v: {
+            if let Some(item_cn) = items_cn.get(item_name.id as usize) {
+                let name_cn = &item_cn.as_ref().unwrap()[1];
+                if !name_cn.is_empty() {
+                    break 'v name_cn.to_string()
+                }
+            }
+            item_name.name.clone()
+        },
+    }).collect();
+
     // For some reason some recipes have items with ID 0 as their result
     recipes.retain(|recipe| recipe.item_id != 0);
 
@@ -174,6 +189,7 @@ async fn main() {
     item_names_de.retain(|item_name| necessary_items.contains(&item_name.id));
     item_names_fr.retain(|item_name| necessary_items.contains(&item_name.id));
     item_names_jp.retain(|item_name| necessary_items.contains(&item_name.id));
+    item_names_cn.retain(|item_name| necessary_items.contains(&item_name.id));
 
     export_rlvls(&rlvls);
     export_level_adjust_table(&level_adjust_table_entries);
@@ -186,4 +202,24 @@ async fn main() {
     export_item_names(&item_names_de, "de");
     export_item_names(&item_names_fr, "fr");
     export_item_names(&item_names_jp, "jp");
+    export_item_names(&item_names_cn, "cn");
+
+    generate_font_subset(
+        "./assets/fonts/M_PLUS_1_Code/subset.ttf",
+        "./assets/fonts/M_PLUS_1_Code/static/MPLUS1Code-Light.ttf",
+        &[
+            "./raphael-data/src/locales.rs",
+            "./raphael-data/data/item_names_jp.rs",
+            "マクロ次へ製作完成了",
+        ],
+    );
+    generate_font_subset(
+        "./assets/fonts/Noto_Sans_SC/subset.ttf",
+        "./assets/fonts/Noto_Sans_SC/static/NotoSansSC-Light.ttf",
+        &[
+            "./raphael-data/src/locales.rs",
+            "./raphael-data/data/item_names_cn.rs",
+            "宏已制作完成",
+        ],
+    );
 }
