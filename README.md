@@ -1,8 +1,10 @@
 # Raphael XIV
-[<img src="https://img.shields.io/discord/1244140502643904522?label=Discord&logo=discord&logoColor=white"/>](https://discord.com/invite/m2aCy3y8he)
-[<img src="https://img.shields.io/github/downloads/KonaeAkira/raphael-rs/total?label=Downloads&color=%23dedede"/>](https://github.com/KonaeAkira/raphael-rs/releases)
 
-:link: [www.raphael-xiv.com](https://www.raphael-xiv.com/)
+Fork of [raphael-rs](https://github.com/KonaeAkira/raphael-rs), add Chinese data and a few opinionated UX changes, mainly for my personal use.
+
+There is a [cn](https://github.com/Asvel/ffxiv-raphael-cn/tree/cn) branch contains only Chinese locale changes, in case anyone need it.
+
+---
 
 Raphael is a crafting rotation solver for the online game Final Fantasy XIV.
 * Produces the most optimal macro according to these [criteria](#optimal-macro-selection).

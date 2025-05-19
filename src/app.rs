@@ -80,7 +80,7 @@ impl MacroSolverApp {
             style.spacing.item_spacing = egui::vec2(8.0, 8.0);
         });
 
-        let locale = load(cc, "LOCALE", Locale::EN);
+        let locale = load(cc, "LOCALE", Locale::CN);
         set_fonts(&cc.egui_ctx, locale);
 
         let latest_version = Arc::new(Mutex::new(semver::Version::new(0, 0, 0)));
@@ -143,7 +143,7 @@ impl eframe::App for MacroSolverApp {
                 });
                 ui.add(egui::Hyperlink::from_label_and_url(
                     "Download from GitHub",
-                    "https://github.com/KonaeAkira/raphael-rs/releases/latest",
+                    "https://github.com/Asvel/ffxiv-raphael-cn/releases/latest",
                 ));
                 ui.separator();
                 ui.vertical_centered_justified(|ui| {
@@ -211,7 +211,7 @@ impl eframe::App for MacroSolverApp {
                         ui.add(
                             egui::Hyperlink::from_label_and_url(
                                 "View latest release on GitHub",
-                                "https://github.com/KonaeAkira/raphael-rs/releases/latest",
+                                "https://github.com/Asvel/ffxiv-raphael-cn/releases/latest",
                             )
                             .open_in_new_tab(true),
                         );
@@ -320,22 +320,14 @@ impl eframe::App for MacroSolverApp {
                         ui.add(
                             egui::Hyperlink::from_label_and_url(
                                 "View source on GitHub",
-                                "https://github.com/KonaeAkira/raphael-rs",
+                                "https://github.com/Asvel/ffxiv-raphael-cn",
                             )
                             .open_in_new_tab(true),
                         );
                         ui.label("/");
                         ui.add(
                             egui::Hyperlink::from_label_and_url(
-                                "Join Discord",
-                                "https://discord.com/invite/m2aCy3y8he",
-                            )
-                            .open_in_new_tab(true),
-                        );
-                        ui.label("/");
-                        ui.add(
-                            egui::Hyperlink::from_label_and_url(
-                                "Support me on Ko-fi",
+                                "Support mainline author on Ko-fi",
                                 "https://ko-fi.com/konaeakira",
                             )
                             .open_in_new_tab(true),
@@ -886,7 +878,7 @@ impl MacroSolverApp {
                 );
                 ui.add(egui::Hyperlink::from_label_and_url(
                     egui::RichText::new("Download latest release from GitHub").small(),
-                    "https://github.com/KonaeAkira/raphael-rs/releases/latest",
+                    "https://github.com/Asvel/ffxiv-raphael-cn/releases/latest",
                 ));
             }
         }
@@ -1167,7 +1159,7 @@ fn fetch_latest_version(latest_version: Arc<Mutex<semver::Version>>) {
         tag_name: String,
     }
     let request =
-        ehttp::Request::get("https://api.github.com/repos/KonaeAkira/raphael-rs/releases/latest");
+        ehttp::Request::get("https://api.github.com/repos/Asvel/ffxiv-raphael-cn/releases/latest");
     ehttp::fetch(
         request,
         move |result: ehttp::Result<ehttp::Response>| match result {

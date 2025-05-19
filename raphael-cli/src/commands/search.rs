@@ -20,7 +20,7 @@ pub struct SearchArgs {
     output_field_separator: String,
 
     /// The language the input pattern and output use
-    #[arg(short, long, alias = "locale", value_enum, ignore_case = true, default_value_t = SearchLanguage::EN)]
+    #[arg(short, long, alias = "locale", value_enum, ignore_case = true, default_value_t = SearchLanguage::CN)]
     language: SearchLanguage,
 }
 
