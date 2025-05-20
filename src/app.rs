@@ -128,6 +128,8 @@ impl eframe::App for MacroSolverApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         set_fonts(ctx, self.locale);
 
+        self.set_window_title(ctx);
+
         self.process_solver_events();
 
         if self
@@ -1066,6 +1068,20 @@ impl MacroSolverApp {
         return "⚠ EXPERIMENTAL FEATURE\nThis option may use a lot of memory (sometimes well above 4GB) which may cause your system to run out of memory.";
         #[cfg(target_arch = "wasm32")]
         return "⚠ EXPERIMENTAL FEATURE\nMay crash the solver due to reaching the 4GB memory limit of 32-bit web assembly, causing the UI to get stuck in the \"solving\" state indefinitely.";
+    }
+
+    fn set_window_title(&self, ctx: &egui::Context) {
+        let egui_id_current = egui::Id::new("title_item");
+        let current_item_id = self.recipe_config.recipe.item_id;
+        if ctx.data(|data| data.get_temp(egui_id_current)) != Some(current_item_id) {
+            ctx.data_mut(|data| data.insert_temp(egui_id_current, current_item_id));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                match raphael_data::get_item_name_raw(current_item_id, self.locale) {
+                    Some(item_name) => format!("{item_name} - Raphael XIV"),
+                    None => "Raphael XIV".to_owned(),
+                }
+            ));
+        }
     }
 }
 

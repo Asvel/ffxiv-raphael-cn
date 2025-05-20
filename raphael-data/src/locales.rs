@@ -44,14 +44,18 @@ pub static ITEM_NAMES_FR: phf::Map<u32, &str> = include!("../data/item_names_fr.
 pub static ITEM_NAMES_JP: phf::Map<u32, &str> = include!("../data/item_names_jp.rs");
 pub static ITEM_NAMES_CN: phf::Map<u32, &str> = include!("../data/item_names_cn.rs");
 
+pub fn get_item_name_raw(item_id: u32, locale: Locale) -> Option<&'static str> {
+    match locale {
+        Locale::EN => ITEM_NAMES_EN.get(&item_id).copied(),
+        Locale::DE => ITEM_NAMES_DE.get(&item_id).copied(),
+        Locale::FR => ITEM_NAMES_FR.get(&item_id).copied(),
+        Locale::JP => ITEM_NAMES_JP.get(&item_id).copied(),
+        Locale::CN => ITEM_NAMES_CN.get(&item_id).copied(),
+    }
+}
+
 pub fn get_item_name(item_id: u32, hq: bool, locale: Locale) -> Option<String> {
-    let item_name = match locale {
-        Locale::EN => ITEM_NAMES_EN.get(&item_id)?.to_owned(),
-        Locale::DE => ITEM_NAMES_DE.get(&item_id)?.to_owned(),
-        Locale::FR => ITEM_NAMES_FR.get(&item_id)?.to_owned(),
-        Locale::JP => ITEM_NAMES_JP.get(&item_id)?.to_owned(),
-        Locale::CN => ITEM_NAMES_CN.get(&item_id)?.to_owned(),
-    };
+    let item_name = get_item_name_raw(item_id, locale)?;
     let item_entry = ITEMS.get(&item_id);
     let always_collectable = item_entry.is_some_and(|item| item.always_collectable);
     if !always_collectable {
