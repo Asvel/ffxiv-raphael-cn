@@ -646,12 +646,12 @@ impl MacroSolverApp {
                 self.locale,
             ));
             ui.add(FoodSelect::new(
-                self.crafter_config.crafter_stats[self.crafter_config.selected_job as usize],
+                *self.crafter_config.active_stats(),
                 &mut self.selected_food,
                 self.locale,
             ));
             ui.add(PotionSelect::new(
-                self.crafter_config.crafter_stats[self.crafter_config.selected_job as usize],
+                *self.crafter_config.active_stats(),
                 &mut self.selected_potion,
                 self.locale,
             ));
@@ -721,6 +721,12 @@ impl MacroSolverApp {
                             );
                         }
                     });
+                if ui.add_enabled(
+                    self.crafter_config.is_detached(),
+                    egui::Button::new(egui::RichText::from("↙").size(14.0))
+                ).clicked() {
+                    self.crafter_config.reset_to_job();
+                }
             });
         });
         ui.separator();
@@ -738,7 +744,9 @@ impl MacroSolverApp {
                 ui.style_mut().spacing.item_spacing.x = 5.0;
                 ui.add_enabled(false, egui::DragValue::new(&mut cms_total));
                 ui.label("➡");
-                ui.add(egui::DragValue::new(cms_base).range(0..=9000));
+                if ui.add(egui::DragValue::new(cms_base).range(0..=9000)).changed() {
+                    self.crafter_config.detach_from_job();
+                }
             });
         });
         ui.horizontal(|ui| {
@@ -753,7 +761,9 @@ impl MacroSolverApp {
                 ui.style_mut().spacing.item_spacing.x = 5.0;
                 ui.add_enabled(false, egui::DragValue::new(&mut control_total));
                 ui.label("➡");
-                ui.add(egui::DragValue::new(control_base).range(0..=9000));
+                if ui.add(egui::DragValue::new(control_base).range(0..=9000)).changed() {
+                    self.crafter_config.detach_from_job();
+                }
             });
         });
         ui.horizontal(|ui| {
@@ -766,16 +776,20 @@ impl MacroSolverApp {
                 ui.style_mut().spacing.item_spacing.x = 5.0;
                 ui.add_enabled(false, egui::DragValue::new(&mut cp_total));
                 ui.label("➡");
-                ui.add(egui::DragValue::new(cp_base).range(0..=9000));
+                if ui.add(egui::DragValue::new(cp_base).range(0..=9000)).changed() {
+                    self.crafter_config.detach_from_job();
+                }
             });
         });
         ui.horizontal(|ui| {
             ui.label("Job level");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.add(
+                if ui.add(
                     egui::DragValue::new(&mut self.crafter_config.active_stats_mut().level)
                         .range(1..=100),
-                );
+                ).changed() {
+                    self.crafter_config.detach_from_job();
+                }
             });
         });
         ui.separator();
@@ -819,10 +833,12 @@ impl MacroSolverApp {
 
         ui.label(egui::RichText::new("Actions").strong());
         if self.crafter_config.active_stats().level >= Manipulation::LEVEL_REQUIREMENT {
-            ui.add(egui::Checkbox::new(
+            if ui.add(egui::Checkbox::new(
                 &mut self.crafter_config.active_stats_mut().manipulation,
                 action_name(Action::Manipulation, self.locale),
-            ));
+            )).changed() {
+                self.crafter_config.detach_from_job();
+            }
         } else {
             ui.add_enabled(
                 false,
@@ -830,10 +846,12 @@ impl MacroSolverApp {
             );
         }
         if self.crafter_config.active_stats().level >= HeartAndSoul::LEVEL_REQUIREMENT {
-            ui.add(egui::Checkbox::new(
+            if ui.add(egui::Checkbox::new(
                 &mut self.crafter_config.active_stats_mut().heart_and_soul,
                 action_name(Action::HeartAndSoul, self.locale),
-            ));
+            )).changed() {
+                self.crafter_config.detach_from_job();
+            }
         } else {
             ui.add_enabled(
                 false,
@@ -841,10 +859,12 @@ impl MacroSolverApp {
             );
         }
         if self.crafter_config.active_stats().level >= QuickInnovation::LEVEL_REQUIREMENT {
-            ui.add(egui::Checkbox::new(
+            if ui.add(egui::Checkbox::new(
                 &mut self.crafter_config.active_stats_mut().quick_innovation,
                 action_name(Action::QuickInnovation, self.locale),
-            ));
+            )).changed() {
+                self.crafter_config.detach_from_job();
+            }
         } else {
             ui.add_enabled(
                 false,
@@ -856,10 +876,10 @@ impl MacroSolverApp {
         }
         let heart_and_soul_enabled = self.crafter_config.active_stats().level
             >= HeartAndSoul::LEVEL_REQUIREMENT
-            && self.crafter_config.active_stats_mut().heart_and_soul;
+            && self.crafter_config.active_stats().heart_and_soul;
         let quick_innovation_enabled = self.crafter_config.active_stats().level
             >= QuickInnovation::LEVEL_REQUIREMENT
-            && self.crafter_config.active_stats_mut().quick_innovation;
+            && self.crafter_config.active_stats().quick_innovation;
         if heart_and_soul_enabled || quick_innovation_enabled {
             #[cfg(not(target_arch = "wasm32"))]
             ui.label(
@@ -897,7 +917,7 @@ impl MacroSolverApp {
                         true => Some(self.custom_recipe_overrides_config.custom_recipe_overrides),
                         false => None,
                     },
-                    self.crafter_config.crafter_stats[self.crafter_config.selected_job as usize],
+                    *self.crafter_config.active_stats(),
                     self.selected_food,
                     self.selected_potion,
                 );
