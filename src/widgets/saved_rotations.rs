@@ -131,7 +131,10 @@ impl<'a> RotationWidget<'a> {
     fn show_rotation_title(&mut self, ui: &mut egui::Ui, collapsed: &mut bool) {
         ui.horizontal(|ui| {
             util::collapse_temporary(ui, self.id_salt("collapsed").into(), collapsed);
-            ui.label(egui::RichText::new(&self.rotation.name).strong());
+            ui.label(egui::RichText::new(
+                raphael_data::get_item_name(self.rotation.item, false, self.locale)
+                    .unwrap_or(self.rotation.name.clone())
+            ).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.add(egui::Button::new("🗑")).clicked() {
                     *self.deleted = true;
