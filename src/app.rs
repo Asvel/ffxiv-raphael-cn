@@ -443,7 +443,39 @@ impl eframe::App for MacroSolverApp {
             ui.add(SavedRotationsWidget::new(
                 self.locale,
                 &mut self.saved_rotations_data,
-                &mut self.actions,
+                &mut |rotation, full| {
+                    self.actions.clone_from(&rotation.actions);
+                    if !full {
+                        return;
+                    }
+
+                    if self.recipe_config.recipe.item_id != rotation.item {
+                        if let Some(recipe) = raphael_data::RECIPES.values().find(|r| {
+                            r.item_id == rotation.item
+                        }) {
+                            self.recipe_config.recipe = *recipe;
+                        }
+                        // not saved, keep it untouched if recipe is not changed, otherwise reset
+                        self.recipe_config.quality_source = QualitySource::HqMaterialList([0; 6]);
+                    }
+                    self.selected_food = rotation.food.and_then(|(id, hq)| {
+                        raphael_data::MEALS.iter().find(|c| {
+                            c.item_id == id && c.hq == hq
+                        }).copied()
+                    });
+                    self.selected_potion = rotation.potion.and_then(|(id, hq)| {
+                        raphael_data::POTIONS.iter().find(|c| {
+                            c.item_id == id && c.hq == hq
+                        }).copied()
+                    });
+                    self.crafter_config.selected_job = rotation.job_id;
+                    if *self.crafter_config.active_stats() != rotation.crafter_stats {
+                        self.crafter_config.detach_from_job();
+                        *self.crafter_config.active_stats_mut() = rotation.crafter_stats;
+                    }
+                    self.solver_config.backload_progress = rotation.solver.contains(" +backload");
+                    self.solver_config.adversarial = rotation.solver.contains(" +adversarial");
+                },
             ));
         });
     }
