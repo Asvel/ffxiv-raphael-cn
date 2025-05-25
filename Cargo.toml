@@ -49,6 +49,7 @@ raphael-data = { workspace = true, features = ["serde"] }
 # Switch back to version number once new egui version is released. Same for `eframe` further down
 egui = { git = "https://github.com/emilk/egui.git", rev = "6a8ee29" }
 egui_extras = { git = "https://github.com/emilk/egui.git", rev = "6a8ee29", features = [
+    "file",
     "http",
     "webp",
 ] }

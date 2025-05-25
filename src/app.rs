@@ -47,10 +47,12 @@ pub struct MacroSolverApp {
     solver_config: SolverConfig,
     macro_view_config: MacroViewConfig,
     saved_rotations_data: SavedRotationsData,
+    saved_rotations_sync_requests: VecDeque<Option<Rotation>>,
 
     latest_version: Arc<Mutex<semver::Version>>,
     current_version: semver::Version,
 
+    main_window_focused_at: Option<std::time::Instant>,
     stats_edit_window_open: bool,
     saved_rotations_window_open: bool,
     missing_stats_error_window_open: bool,
@@ -102,10 +104,12 @@ impl MacroSolverApp {
             solver_config: load(cc, "SOLVER_CONFIG", SolverConfig::default()),
             macro_view_config: load(cc, "MACRO_VIEW_CONFIG", MacroViewConfig::default()),
             saved_rotations_data: load(cc, "SAVED_ROTATIONS", SavedRotationsData::default()),
+            saved_rotations_sync_requests: VecDeque::new(),
 
             latest_version: latest_version.clone(),
             current_version: semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap(),
 
+            main_window_focused_at: None,
             stats_edit_window_open: false,
             saved_rotations_window_open: false,
             missing_stats_error_window_open: false,
@@ -131,6 +135,8 @@ impl eframe::App for MacroSolverApp {
         self.set_window_title(ctx);
 
         self.process_solver_events();
+
+        self.process_storage_syncing(ctx, _frame);
 
         if self
             .current_version
@@ -462,6 +468,15 @@ impl eframe::App for MacroSolverApp {
     fn auto_save_interval(&self) -> std::time::Duration {
         std::time::Duration::from_secs(1)
     }
+
+    fn persist_egui_memory(&self) -> bool {
+        // pause egui states saving to keep storage unchanged, to skip storage file rewriting,
+        // to avoid most unwanted SAVED_ROTATIONS overwriting under multiple app instances
+        match self.main_window_focused_at {
+            Some(time) => time.elapsed().as_secs() >= 3,
+            None => false,
+        }
+    }
 }
 
 impl MacroSolverApp {
@@ -476,7 +491,7 @@ impl MacroSolverApp {
                     self.solver_pending = false;
                     self.solver_interrupt.clear();
                     if exception.is_none() {
-                        self.saved_rotations_data.add_solved_rotation(Rotation::new(
+                        self.saved_rotations_sync_requests.push_back(Some(Rotation::new(
                             raphael_data::get_item_name(
                                 self.recipe_config.recipe.item_id,
                                 false,
@@ -489,7 +504,7 @@ impl MacroSolverApp {
                             self.selected_potion,
                             &self.crafter_config,
                             &self.solver_config,
-                        ));
+                        )));
                     } else {
                         self.solver_error = exception;
                     }
@@ -1101,6 +1116,68 @@ impl MacroSolverApp {
                     None => "Raphael XIV".to_owned(),
                 }
             ));
+        }
+    }
+
+    fn process_storage_syncing(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.input(|input| {
+            for event in input.raw.events.iter().rev() {
+                if let egui::Event::WindowFocused(focused) = event {
+                    if *focused {
+                        self.saved_rotations_sync_requests.push_back(None);
+                        self.main_window_focused_at = Some(std::time::Instant::now());
+                    } else {
+                        self.main_window_focused_at = None;
+                    }
+                    break;
+                }
+            }
+        });
+
+        #[cfg(not(target_arch = "wasm32"))]
+        // native storage caches values forever, we can only read it from file manually
+        let mut sync_saved_rotations = || {
+            match eframe::storage_dir("Raphael XIV") {
+                Some(path) => {
+                    let uri = format!("file://{}", path.join("app.ron").to_str().unwrap());
+                    match ctx.try_load_bytes(&uri) {
+                        Ok(egui::load::BytesPoll::Ready { bytes, .. }) => {
+                            type KV = std::collections::HashMap<String, String>;
+                            if let Ok(kv) = ron::de::from_bytes::<KV>(&bytes) {
+                                if let Some(value) = kv.get("SAVED_ROTATIONS") {
+                                    if let Ok(value) = ron::de::from_str(value) {
+                                        self.saved_rotations_data = value;
+                                    }
+                                }
+                            }
+                            for loader in ctx.loaders().bytes.lock().iter() {
+                                loader.forget(&uri);
+                            }
+                            true
+                        },
+                        _ => false,  // waiting file IO
+                    }
+                },
+                None => true,  // no storage, continue subsequent operations as success
+            }
+        };
+        #[cfg(target_arch = "wasm32")]
+        // web storage retrieves value from browser directly
+        let mut sync_saved_rotations = || {
+            if let Some(storage) = _frame.storage() {
+                if let Some(value) = eframe::get_value(storage, "SAVED_ROTATIONS") {
+                    self.saved_rotations_data = value;
+                }
+            }
+            true
+        };
+
+        if self.saved_rotations_sync_requests.len() > 0 && sync_saved_rotations() {
+            while let Some(request) = self.saved_rotations_sync_requests.pop_front() {
+                if let Some(rotation) = request {
+                    self.saved_rotations_data.add_solved_rotation(rotation);
+                }
+            }
         }
     }
 }
