@@ -109,7 +109,7 @@ struct RotationWidget<'a> {
     pinned: &'a mut bool,
     deleted: &'a mut bool,
     rotation: &'a Rotation,
-    load_rotation: &'a mut dyn FnMut(&Rotation, bool),
+    actions: &'a mut Vec<Action>,
 }
 
 impl<'a> RotationWidget<'a> {
@@ -118,14 +118,14 @@ impl<'a> RotationWidget<'a> {
         pinned: &'a mut bool,
         deleted: &'a mut bool,
         rotation: &'a Rotation,
-        load_rotation: &'a mut dyn FnMut(&Rotation, bool),
+        actions: &'a mut Vec<Action>,
     ) -> Self {
         Self {
             locale,
             pinned,
             deleted,
             rotation,
-            load_rotation,
+            actions,
         }
     }
 
@@ -152,11 +152,8 @@ impl<'a> RotationWidget<'a> {
                     *self.pinned = true;
                 }
                 ui.add_space(-3.0);
-                if ui.button("Apply").clicked() {
-                    (self.load_rotation)(&self.rotation, false);
-                }
                 if ui.button("Load").clicked() {
-                    (self.load_rotation)(&self.rotation, true);
+                    self.actions.clone_from(&self.rotation.actions);
                 }
                 let duration = self
                     .rotation
@@ -258,19 +255,19 @@ impl egui::Widget for RotationWidget<'_> {
 pub struct SavedRotationsWidget<'a> {
     locale: Locale,
     rotations: &'a mut SavedRotationsData,
-    load_rotation: &'a mut dyn FnMut(&Rotation, bool),
+    actions: &'a mut Vec<Action>,
 }
 
 impl<'a> SavedRotationsWidget<'a> {
     pub fn new(
         locale: Locale,
         rotations: &'a mut SavedRotationsData,
-        load_rotation: &'a mut dyn FnMut(&Rotation, bool),
+        actions: &'a mut Vec<Action>,
     ) -> Self {
         Self {
             locale,
             rotations,
-            load_rotation,
+            actions,
         }
     }
 }
@@ -292,7 +289,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             &mut true,
                             &mut deleted,
                             rotation,
-                            self.load_rotation,
+                            self.actions,
                         ));
                         !deleted
                     });
@@ -321,7 +318,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             &mut pinned,
                             &mut deleted,
                             rotation,
-                            self.load_rotation,
+                            self.actions,
                         ));
                         if pinned {
                             self.rotations.pinned.push(rotation.clone());
