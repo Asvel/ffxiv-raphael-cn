@@ -14,8 +14,7 @@ impl ReducedState {
         settings.allowed_actions = settings
             .allowed_actions
             .remove(Action::Observe)
-            .remove(Action::TricksOfTheTrade)
-            .remove(Action::TrainedPerfection);
+            .remove(Action::TricksOfTheTrade);
         // WasteNot2 is always better than WasteNot because there is no CP cost
         if settings.is_action_allowed::<WasteNot2>() {
             settings.allowed_actions = settings.allowed_actions.remove(Action::WasteNot);
@@ -34,11 +33,46 @@ impl ReducedState {
         }
     }
 
-    pub fn from_state(state: SimulationState, steps_budget: NonZeroU8) -> Self {
+    pub fn from_state(state: SimulationState, step_budget: NonZeroU8) -> Self {
+        // Optimize effects
+        let mut effects = state.effects;
+        // Make it so that TrainedPerfection can be used an arbitrary amount of times instead of just once.
+        // This decreases the number of possible states, as now there are only Active/Inactive states for TrainedPerfection instead of the usual Available/Active/Unavailable.
+        // This also technically loosens the step-lb, but testing shows that rarely has any impact on the number of pruned nodes.
+        effects.set_trained_perfection_available(true);
+        if effects.manipulation() > step_budget.get() - 1 {
+            effects.set_manipulation(step_budget.get() - 1);
+        }
+        if effects.waste_not() != 0 {
+            // make waste not last forever
+            // this gives a looser bound but decreases the number of states
+            effects.set_waste_not(8);
+        }
+        if effects.veneration() > step_budget.get() {
+            effects.set_veneration(step_budget.get());
+        }
+        if effects.innovation() > step_budget.get() {
+            effects.set_innovation(step_budget.get());
+        }
+        if effects.great_strides() != 0 {
+            // make great strides last forever (until used)
+            // this gives a looser bound but decreases the number of states
+            effects.set_great_strides(3);
+        }
+        effects.set_adversarial_guard(false);
+        // Optimize durability
+        let durability = {
+            let mut usable_durability = u16::from(step_budget.get()) * 20;
+            let usable_manipulation = std::cmp::min(effects.manipulation(), step_budget.get() - 1);
+            usable_durability -= u16::from(usable_manipulation) * 5;
+            let usable_waste_not = std::cmp::min(effects.waste_not(), step_budget.get());
+            usable_durability -= u16::from(usable_waste_not) * 10;
+            std::cmp::min(usable_durability, state.durability)
+        };
         Self {
-            steps_budget,
-            durability: Self::optimize_durability(state.effects, state.durability, steps_budget),
-            effects: Self::optimize_effects(state.effects, steps_budget),
+            steps_budget: step_budget,
+            durability,
+            effects,
         }
     }
 
@@ -51,38 +85,5 @@ impl ReducedState {
             unreliable_quality: 0,
             effects: self.effects,
         }
-    }
-
-    fn optimize_durability(effects: Effects, durability: u16, step_budget: NonZeroU8) -> u16 {
-        let mut usable_durability = u16::from(step_budget.get()) * 20;
-        let usable_manipulation = std::cmp::min(effects.manipulation(), step_budget.get() - 1);
-        usable_durability -= u16::from(usable_manipulation) * 5;
-        let usable_waste_not = std::cmp::min(effects.waste_not(), step_budget.get());
-        usable_durability -= u16::from(usable_waste_not) * 10;
-        std::cmp::min(usable_durability, durability)
-    }
-
-    fn optimize_effects(mut effects: Effects, step_budget: NonZeroU8) -> Effects {
-        if effects.manipulation() > step_budget.get() - 1 {
-            effects.set_manipulation(step_budget.get() - 1);
-        }
-        if effects.waste_not() != 0 {
-            // make waste not last forever
-            // this gives a looser bound but decreases the number of states
-            effects.set_waste_not(8);
-        }
-        effects.set_trained_perfection_available(false);
-        if effects.veneration() > step_budget.get() {
-            effects.set_veneration(step_budget.get());
-        }
-        if effects.innovation() > step_budget.get() {
-            effects.set_innovation(step_budget.get());
-        }
-        if effects.great_strides() != 0 {
-            // make great strides last forever (until used)
-            // this gives a looser bound but decreases the number of states
-            effects.set_great_strides(3);
-        }
-        effects.with_adversarial_guard(true)
     }
 }

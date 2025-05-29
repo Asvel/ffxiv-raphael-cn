@@ -97,19 +97,21 @@ fn stuffed_peppers() {
     "#]];
     let expected_runtime_stats = expect![[r#"
         MacroSolverStats {
-            finish_states: 886551,
+            finish_states: 887756,
             search_queue_stats: SearchQueueStats {
-                processed_nodes: 79712,
-                dropped_nodes: 1501578,
-                pareto_buckets_squared_size_sum: 1172823,
+                processed_nodes: 81291,
+                dropped_nodes: 1587531,
+                pareto_buckets_squared_size_sum: 1244052,
             },
             quality_ub_stats: QualityUbSolverStats {
-                states: 4722074,
-                pareto_values: 77746538,
+                parallel_states: 2271577,
+                sequential_states: 11,
+                pareto_values: 39199991,
             },
             step_lb_stats: StepLbSolverStats {
-                states: 842949,
-                pareto_values: 14857558,
+                parallel_states: 1414006,
+                sequential_states: 1355,
+                pareto_values: 20623813,
             },
         }
     "#]];
@@ -148,19 +150,21 @@ fn test_rare_tacos_2() {
     "#]];
     let expected_runtime_stats = expect![[r#"
         MacroSolverStats {
-            finish_states: 1376236,
+            finish_states: 1465416,
             search_queue_stats: SearchQueueStats {
-                processed_nodes: 2332448,
-                dropped_nodes: 512436,
-                pareto_buckets_squared_size_sum: 143370684,
+                processed_nodes: 3386237,
+                dropped_nodes: 28582063,
+                pareto_buckets_squared_size_sum: 298723983,
             },
             quality_ub_stats: QualityUbSolverStats {
-                states: 5030738,
-                pareto_values: 135274246,
+                parallel_states: 2490785,
+                sequential_states: 77299,
+                pareto_values: 70118044,
             },
             step_lb_stats: StepLbSolverStats {
-                states: 1388845,
-                pareto_values: 31625292,
+                parallel_states: 2227573,
+                sequential_states: 2,
+                pareto_values: 42541739,
             },
         }
     "#]];
@@ -200,19 +204,21 @@ fn test_mountain_chromite_ingot_no_manipulation() {
     "#]];
     let expected_runtime_stats = expect![[r#"
         MacroSolverStats {
-            finish_states: 75899,
+            finish_states: 77649,
             search_queue_stats: SearchQueueStats {
-                processed_nodes: 26294,
-                dropped_nodes: 296454,
-                pareto_buckets_squared_size_sum: 463009,
+                processed_nodes: 28453,
+                dropped_nodes: 373944,
+                pareto_buckets_squared_size_sum: 600321,
             },
             quality_ub_stats: QualityUbSolverStats {
-                states: 3772842,
-                pareto_values: 33011766,
+                parallel_states: 1800446,
+                sequential_states: 545,
+                pareto_values: 16363329,
             },
             step_lb_stats: StepLbSolverStats {
-                states: 58468,
-                pareto_values: 520164,
+                parallel_states: 52408,
+                sequential_states: 314,
+                pareto_values: 449928,
             },
         }
     "#]];
@@ -249,19 +255,21 @@ fn test_indagator_3858_4057() {
     "#]];
     let expected_runtime_stats = expect![[r#"
         MacroSolverStats {
-            finish_states: 449667,
+            finish_states: 512563,
             search_queue_stats: SearchQueueStats {
-                processed_nodes: 8953,
-                dropped_nodes: 10680,
-                pareto_buckets_squared_size_sum: 99526,
+                processed_nodes: 20479,
+                dropped_nodes: 199583,
+                pareto_buckets_squared_size_sum: 314742,
             },
             quality_ub_stats: QualityUbSolverStats {
-                states: 5310554,
-                pareto_values: 125659412,
+                parallel_states: 2515306,
+                sequential_states: 140937,
+                pareto_values: 64650413,
             },
             step_lb_stats: StepLbSolverStats {
-                states: 675136,
-                pareto_values: 13435389,
+                parallel_states: 0,
+                sequential_states: 0,
+                pareto_values: 0,
             },
         }
     "#]];
@@ -299,19 +307,127 @@ fn test_rare_tacos_4628_4410() {
     "#]];
     let expected_runtime_stats = expect![[r#"
         MacroSolverStats {
-            finish_states: 502169,
+            finish_states: 554262,
             search_queue_stats: SearchQueueStats {
-                processed_nodes: 553135,
-                dropped_nodes: 0,
-                pareto_buckets_squared_size_sum: 23891886,
+                processed_nodes: 947506,
+                dropped_nodes: 2316515,
+                pareto_buckets_squared_size_sum: 65519330,
             },
             quality_ub_stats: QualityUbSolverStats {
-                states: 5298836,
-                pareto_values: 151000601,
+                parallel_states: 2623634,
+                sequential_states: 69176,
+                pareto_values: 78047665,
             },
             step_lb_stats: StepLbSolverStats {
-                states: 319254,
-                pareto_values: 6969627,
+                parallel_states: 420784,
+                sequential_states: 0,
+                pareto_values: 8205611,
+            },
+        }
+    "#]];
+    test_with_settings(solver_settings, expected_score, expected_runtime_stats);
+}
+
+#[test]
+fn issue_113() {
+    // https://github.com/KonaeAkira/raphael-rs/issues/113
+    // Ceremonial Gunblade
+    // 5428/5236/645 + HQ Ceviche + HQ Cunning Tisane
+    let simulator_settings = Settings {
+        max_cp: 768,
+        max_durability: 70,
+        max_progress: 9000,
+        max_quality: 18700,
+        base_progress: 297,
+        base_quality: 288,
+        job_level: 100,
+        allowed_actions: ActionMask::all()
+            .remove(Action::TrainedEye)
+            .remove(Action::HeartAndSoul)
+            .remove(Action::QuickInnovation),
+        adversarial: true,
+        backload_progress: false,
+    };
+    let solver_settings = SolverSettings { simulator_settings };
+    let expected_score = expect![[r#"
+        Some(
+            SolutionScore {
+                capped_quality: 14070,
+                steps: 33,
+                duration: 93,
+                overflow_quality: 0,
+            },
+        )
+    "#]];
+    let expected_runtime_stats = expect![[r#"
+        MacroSolverStats {
+            finish_states: 1960833,
+            search_queue_stats: SearchQueueStats {
+                processed_nodes: 1268483,
+                dropped_nodes: 17918421,
+                pareto_buckets_squared_size_sum: 78163755,
+            },
+            quality_ub_stats: QualityUbSolverStats {
+                parallel_states: 3043554,
+                sequential_states: 80265,
+                pareto_values: 120616636,
+            },
+            step_lb_stats: StepLbSolverStats {
+                parallel_states: 0,
+                sequential_states: 0,
+                pareto_values: 0,
+            },
+        }
+    "#]];
+    test_with_settings(solver_settings, expected_score, expected_runtime_stats);
+}
+
+#[test]
+fn issue_118() {
+    // https://github.com/KonaeAkira/raphael-rs/issues/118
+    let simulator_settings = Settings {
+        max_cp: 614,
+        max_durability: 20,
+        max_progress: 2310,
+        max_quality: 8400,
+        base_progress: 205,
+        base_quality: 240,
+        job_level: 100,
+        allowed_actions: ActionMask::all()
+            .remove(Action::TrainedEye)
+            .remove(Action::HeartAndSoul)
+            .remove(Action::QuickInnovation),
+        adversarial: true,
+        backload_progress: false,
+    };
+    let solver_settings = SolverSettings { simulator_settings };
+    let expected_score = expect![[r#"
+        Some(
+            SolutionScore {
+                capped_quality: 8400,
+                steps: 19,
+                duration: 52,
+                overflow_quality: 84,
+            },
+        )
+    "#]];
+    let expected_runtime_stats = expect![[r#"
+        MacroSolverStats {
+            finish_states: 571642,
+            search_queue_stats: SearchQueueStats {
+                processed_nodes: 1215569,
+                dropped_nodes: 14411862,
+                pareto_buckets_squared_size_sum: 216085380,
+            },
+            quality_ub_stats: QualityUbSolverStats {
+                parallel_states: 1931154,
+                sequential_states: 50515,
+                pareto_values: 25428797,
+            },
+            step_lb_stats: StepLbSolverStats {
+                parallel_states: 258314,
+                sequential_states: 36,
+                pareto_values: 2699561,
             },
         }
     "#]];
