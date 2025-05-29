@@ -227,4 +227,12 @@ async fn main() {
             "宏已制作完成",
         ],
     );
+    generate_font_subset(
+        "./assets/fonts/Noto_Sans_KR/subset.ttf",
+        "./assets/fonts/Noto_Sans_KR/static/NotoSansKR-Light.ttf",
+        &[
+            "./raphael-data/src/locales.rs",
+            "./raphael-data/data/item_names_kr.rs",
+        ],
+    );
 }

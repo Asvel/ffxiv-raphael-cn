@@ -1188,6 +1188,16 @@ fn set_fonts(ctx: &egui::Context, locale: Locale) {
                 ..Default::default()
             })
         ),
+        Locale::KR => add_font(
+            "NotoSansKR",
+            egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/Noto_Sans_KR/subset.ttf"
+            ))
+            .tweak(egui::FontTweak {
+                baseline_offset_factor: -0.05,
+                ..Default::default()
+            })
+        ),
         _ => (),
     }
     ctx.set_fonts(fonts);
