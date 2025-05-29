@@ -92,11 +92,6 @@ impl SavedRotationsData {
     const MAX_HISTORY_SIZE: usize = 50;
 
     pub fn add_solved_rotation(&mut self, rotation: Rotation) {
-        if rotation.item != 0 && let Some(index) = self.solve_history.iter().position(|r| {
-            r.item == rotation.item && r.actions == rotation.actions
-        }) {
-            self.solve_history.remove(index);
-        }
         while self.solve_history.len() == Self::MAX_HISTORY_SIZE {
             self.solve_history.pop_back();
         }
