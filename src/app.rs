@@ -6,7 +6,7 @@ use raphael_solver::SolverException;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use egui::{Align, CursorIcon, Id, Layout, TextStyle};
-use raphael_data::{Consumable, Locale, action_name, get_initial_quality, get_job_name};
+use raphael_data::{Consumable, Locale, action_name, get_job_name};
 
 use raphael_sim::{Action, ActionImpl, HeartAndSoul, Manipulation, QuickInnovation};
 
@@ -14,7 +14,7 @@ use crate::config::{
     AppConfig, CrafterConfig, CustomRecipeOverridesConfiguration, QualitySource, QualityTarget,
     RecipeConfiguration,
 };
-use crate::{thread_pool, widgets::*};
+use crate::{thread_pool, util, widgets::*};
 
 fn load<T: DeserializeOwned>(cc: &eframe::CreationContext<'_>, key: &'static str, default: T) -> T {
     match cc.storage {
@@ -26,6 +26,7 @@ fn load<T: DeserializeOwned>(cc: &eframe::CreationContext<'_>, key: &'static str
 enum SolverEvent {
     NodesVisited(usize),
     Actions(Vec<Action>),
+    LoadedFromHistory(),
     Finished(Option<SolverException>),
 }
 
@@ -34,6 +35,13 @@ pub struct SolverConfig {
     pub quality_target: QualityTarget,
     pub backload_progress: bool,
     pub adversarial: bool,
+}
+
+#[cfg(any(debug_assertions, feature = "dev-panel"))]
+#[derive(Debug, Default)]
+struct DevPanelState {
+    show_dev_panel: bool,
+    render_info_state: RenderInfoState,
 }
 
 pub struct MacroSolverApp {
@@ -46,8 +54,12 @@ pub struct MacroSolverApp {
     crafter_config: CrafterConfig,
     solver_config: SolverConfig,
     macro_view_config: MacroViewConfig,
+    saved_rotations_config: SavedRotationsConfig,
     saved_rotations_data: SavedRotationsData,
     saved_rotations_sync_requests: VecDeque<Option<Rotation>>,
+
+    #[cfg(any(debug_assertions, feature = "dev-panel"))]
+    dev_panel_state: DevPanelState,
 
     latest_version: Arc<Mutex<semver::Version>>,
     current_version: semver::Version,
@@ -103,8 +115,16 @@ impl MacroSolverApp {
             crafter_config: load(cc, "CRAFTER_CONFIG", CrafterConfig::default()),
             solver_config: load(cc, "SOLVER_CONFIG", SolverConfig::default()),
             macro_view_config: load(cc, "MACRO_VIEW_CONFIG", MacroViewConfig::default()),
+            saved_rotations_config: load(
+                cc,
+                "SAVED_ROTATIONS_CONFIG",
+                SavedRotationsConfig::default(),
+            ),
             saved_rotations_data: load(cc, "SAVED_ROTATIONS", SavedRotationsData::default()),
             saved_rotations_sync_requests: VecDeque::new(),
+
+            #[cfg(any(debug_assertions, feature = "dev-panel"))]
+            dev_panel_state: DevPanelState::default(),
 
             latest_version: latest_version.clone(),
             current_version: semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap(),
@@ -323,6 +343,11 @@ impl eframe::App for MacroSolverApp {
                                     Locale::CN,
                                     format!("{}", Locale::CN),
                                 );
+                                ui.selectable_value(
+                                    &mut self.locale,
+                                    Locale::KR,
+                                    format!("{}", Locale::KR),
+                                );
                             });
 
                         ui.add(
@@ -340,12 +365,35 @@ impl eframe::App for MacroSolverApp {
                             )
                             .open_in_new_tab(true),
                         );
+                        #[cfg(debug_assertions)]
+                        ui.allocate_space(egui::vec2(145.0, 0.0));
+                        #[cfg(all(not(debug_assertions), feature = "dev-panel"))]
+                        ui.allocate_space(egui::vec2(68.0, 0.0));
+                        #[cfg(any(debug_assertions, feature = "dev-panel"))]
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .selectable_label(self.dev_panel_state.show_dev_panel, "Dev Panel")
+                                .clicked()
+                            {
+                                self.dev_panel_state.show_dev_panel =
+                                    !self.dev_panel_state.show_dev_panel;
+                            }
                             egui::warn_if_debug_build(ui);
+                            ui.separator();
                         });
                     });
                 });
         });
+
+        #[cfg(any(debug_assertions, feature = "dev-panel"))]
+        if self.dev_panel_state.show_dev_panel {
+            egui::SidePanel::right("dev_panel")
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 3.0);
+                    RenderInfo::new(&mut self.dev_panel_state.render_info_state).ui(ui, _frame);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
@@ -442,8 +490,14 @@ impl eframe::App for MacroSolverApp {
             ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 3.0);
             ui.add(SavedRotationsWidget::new(
                 self.locale,
+                &mut self.saved_rotations_config,
                 &mut self.saved_rotations_data,
                 &mut self.actions,
+                &mut self.crafter_config,
+                &mut self.recipe_config,
+                &mut self.custom_recipe_overrides_config,
+                &mut self.selected_food,
+                &mut self.selected_potion,
             ));
         });
     }
@@ -462,6 +516,11 @@ impl eframe::App for MacroSolverApp {
         eframe::set_value(storage, "CRAFTER_CONFIG", &self.crafter_config);
         eframe::set_value(storage, "SOLVER_CONFIG", &self.solver_config);
         eframe::set_value(storage, "MACRO_VIEW_CONFIG", &self.macro_view_config);
+        eframe::set_value(
+            storage,
+            "SAVED_ROTATIONS_CONFIG",
+            &self.saved_rotations_config,
+        );
         eframe::set_value(storage, "SAVED_ROTATIONS", &self.saved_rotations_data);
     }
 
@@ -486,12 +545,28 @@ impl MacroSolverApp {
             match event {
                 SolverEvent::NodesVisited(count) => self.solver_progress = count,
                 SolverEvent::Actions(actions) => self.actions = actions,
+                SolverEvent::LoadedFromHistory() => self.solver_progress = usize::MAX,
                 SolverEvent::Finished(exception) => {
                     self.duration = self.start_time.elapsed();
                     self.solver_pending = false;
                     self.solver_interrupt.clear();
                     if exception.is_none() {
-                        self.saved_rotations_sync_requests.push_back(Some(Rotation::new(
+                        let mut game_settings = raphael_data::get_game_settings(
+                            self.recipe_config.recipe,
+                            match self.custom_recipe_overrides_config.use_custom_recipe {
+                                true => Some(
+                                    self.custom_recipe_overrides_config.custom_recipe_overrides,
+                                ),
+                                false => None,
+                            },
+                            self.crafter_config.crafter_stats
+                                [self.crafter_config.selected_job as usize],
+                            self.selected_food,
+                            self.selected_potion,
+                        );
+                        game_settings.adversarial = self.solver_config.adversarial;
+                        game_settings.backload_progress = self.solver_config.backload_progress;
+                        let new_rotation = Rotation::new(
                             raphael_data::get_item_name(
                                 self.recipe_config.recipe.item_id,
                                 false,
@@ -499,12 +574,15 @@ impl MacroSolverApp {
                             )
                             .unwrap_or("Unknown item".to_owned()),
                             self.actions.clone(),
-                            &self.recipe_config.recipe,
+                            &self.recipe_config,
+                            &self.custom_recipe_overrides_config,
+                            &game_settings,
+                            &self.solver_config,
                             self.selected_food,
                             self.selected_potion,
                             &self.crafter_config,
-                            &self.solver_config,
-                        )));
+                        );
+                        self.saved_rotations_sync_requests.push_back(Some(new_rotation));
                     } else {
                         self.solver_error = exception;
                     }
@@ -615,26 +693,15 @@ impl MacroSolverApp {
     }
 
     fn draw_simulator_widget(&mut self, ui: &mut egui::Ui) {
-        let mut game_settings = raphael_data::get_game_settings(
-            self.recipe_config.recipe,
-            match self.custom_recipe_overrides_config.use_custom_recipe {
-                true => Some(self.custom_recipe_overrides_config.custom_recipe_overrides),
-                false => None,
-            },
-            *self.crafter_config.active_stats(),
+        let game_settings = util::get_game_settings(
+            &self.recipe_config,
+            &self.custom_recipe_overrides_config,
+            &self.solver_config,
+            &self.crafter_config,
             self.selected_food,
             self.selected_potion,
         );
-        game_settings.adversarial = self.solver_config.adversarial;
-        game_settings.backload_progress = self.solver_config.backload_progress;
-        let initial_quality = match self.recipe_config.quality_source {
-            QualitySource::HqMaterialList(hq_materials) => raphael_data::get_initial_quality(
-                *self.crafter_config.active_stats(),
-                self.recipe_config.recipe,
-                hq_materials,
-            ),
-            QualitySource::Value(quality) => quality,
-        };
+        let initial_quality = util::get_initial_quality(&self.recipe_config, &self.crafter_config);
         let item = raphael_data::ITEMS
             .get(&self.recipe_config.recipe.item_id)
             .copied()
@@ -708,7 +775,11 @@ impl MacroSolverApp {
                     });
                 });
                 ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                    ui.label(format!("Elapsed time: {:.2}s", self.duration.as_secs_f32()));
+                    if self.solver_progress == usize::MAX {
+                        ui.label("Loaded from saved rotations");
+                    } else if self.solver_progress > 0 {
+                        ui.label(format!("Elapsed time: {:.2}s", self.duration.as_secs_f32()));
+                    }
                 });
                 // fill the remaining space
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |_| {});
@@ -1013,7 +1084,6 @@ impl MacroSolverApp {
                     .color(ui.visuals().warn_fg_color),
             );
         }
-        ui.add_enabled(false, egui::Checkbox::new(&mut true, "Minimize steps"));
     }
 
     fn on_solve_initiated(&mut self, ctx: &egui::Context) {
@@ -1046,35 +1116,18 @@ impl MacroSolverApp {
     }
 
     fn solve(&mut self, ctx: &egui::Context) {
-        self.actions = Vec::new();
         self.solver_pending = true;
         self.solver_interrupt.clear();
-        self.solver_progress = 0;
-        self.start_time = web_time::Instant::now();
-        let mut game_settings = raphael_data::get_game_settings(
-            self.recipe_config.recipe,
-            match self.custom_recipe_overrides_config.use_custom_recipe {
-                true => Some(self.custom_recipe_overrides_config.custom_recipe_overrides),
-                false => None,
-            },
-            *self.crafter_config.active_stats(),
+
+        let mut game_settings = util::get_game_settings(
+            &self.recipe_config,
+            &self.custom_recipe_overrides_config,
+            &self.solver_config,
+            &self.crafter_config,
             self.selected_food,
             self.selected_potion,
         );
-        let target_quality = self
-            .solver_config
-            .quality_target
-            .get_target(game_settings.max_quality);
-        let initial_quality = match self.recipe_config.quality_source {
-            QualitySource::HqMaterialList(hq_materials) => get_initial_quality(
-                *self.crafter_config.active_stats(),
-                self.recipe_config.recipe,
-                hq_materials,
-            ),
-            QualitySource::Value(quality) => quality,
-        };
-        game_settings.max_quality = target_quality.saturating_sub(initial_quality) as u16;
-
+        let initial_quality = util::get_initial_quality(&self.recipe_config, &self.crafter_config);
         ctx.data_mut(|data| {
             data.insert_temp(
                 Id::new("LAST_SOLVE_PARAMS"),
@@ -1082,12 +1135,32 @@ impl MacroSolverApp {
             );
         });
 
-        spawn_solver(
-            self.solver_config,
-            game_settings,
-            self.solver_events.clone(),
-            self.solver_interrupt.clone(),
-        );
+        if self.saved_rotations_config.load_from_saved_rotations
+            && let Some(actions) = self.saved_rotations_data.find_solved_rotation(
+                &game_settings,
+                initial_quality,
+                &self.solver_config,
+            )
+        {
+            let mut solver_events = self.solver_events.lock().unwrap();
+            solver_events.push_back(SolverEvent::Actions(actions));
+            solver_events.push_back(SolverEvent::LoadedFromHistory());
+            solver_events.push_back(SolverEvent::Finished(None));
+        } else {
+            let target_quality = self
+                .solver_config
+                .quality_target
+                .get_target(game_settings.max_quality);
+            game_settings.max_quality = target_quality.saturating_sub(initial_quality) as u16;
+            self.actions = Vec::new();
+            self.solver_progress = 0;
+            self.start_time = web_time::Instant::now();
+            spawn_solver(
+                game_settings,
+                self.solver_events.clone(),
+                self.solver_interrupt.clone(),
+            );
+        }
     }
 
     fn draw_macro_output_widget(&mut self, ui: &mut egui::Ui) {
@@ -1175,7 +1248,8 @@ impl MacroSolverApp {
         if self.saved_rotations_sync_requests.len() > 0 && sync_saved_rotations() {
             while let Some(request) = self.saved_rotations_sync_requests.pop_front() {
                 if let Some(rotation) = request {
-                    self.saved_rotations_data.add_solved_rotation(rotation);
+                    self.saved_rotations_data
+                        .add_solved_rotation(rotation, &self.saved_rotations_config);
                 }
             }
         }
@@ -1219,14 +1293,23 @@ fn set_fonts(ctx: &egui::Context, locale: Locale) {
                 ..Default::default()
             })
         ),
+        Locale::KR => add_font(
+            "NotoSansKR",
+            egui::FontData::from_static(include_bytes!(
+                "../assets/fonts/Noto_Sans_KR/subset.ttf"
+            ))
+            .tweak(egui::FontTweak {
+                baseline_offset_factor: -0.05,
+                ..Default::default()
+            })
+        ),
         _ => (),
     }
     ctx.set_fonts(fonts);
 }
 
 fn spawn_solver(
-    solver_config: SolverConfig,
-    mut simulator_settings: raphael_sim::Settings,
+    simulator_settings: raphael_sim::Settings,
     solver_events: Arc<Mutex<VecDeque<SolverEvent>>>,
     solver_interrupt: raphael_solver::AtomicFlag,
 ) {
@@ -1241,8 +1324,6 @@ fn spawn_solver(
         events.lock().unwrap().push_back(event);
     };
     rayon::spawn(move || {
-        simulator_settings.adversarial = solver_config.adversarial;
-        simulator_settings.backload_progress = solver_config.backload_progress;
         let solver_settings = raphael_solver::SolverSettings { simulator_settings };
         log::debug!("Spawning solver: {solver_settings:?}");
         let mut macro_solver = raphael_solver::MacroSolver::new(

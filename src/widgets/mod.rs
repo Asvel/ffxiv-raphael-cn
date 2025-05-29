@@ -23,6 +23,13 @@ mod item_name_label;
 pub use item_name_label::ItemNameLabel;
 
 mod saved_rotations;
-pub use saved_rotations::{Rotation, SavedRotationsData, SavedRotationsWidget};
+pub use saved_rotations::{
+    Rotation, SavedRotationsConfig, SavedRotationsData, SavedRotationsWidget,
+};
+
+#[cfg(any(debug_assertions, feature = "dev-panel"))]
+mod render_info;
+#[cfg(any(debug_assertions, feature = "dev-panel"))]
+pub use render_info::{RenderInfo, RenderInfoState};
 
 mod util;

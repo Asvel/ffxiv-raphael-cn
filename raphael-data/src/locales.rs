@@ -9,6 +9,7 @@ pub enum Locale {
     FR,
     JP,
     CN,
+    KR,
 }
 
 impl std::fmt::Display for Locale {
@@ -19,6 +20,7 @@ impl std::fmt::Display for Locale {
             Self::FR => write!(f, "FR"),
             Self::JP => write!(f, "JP"),
             Self::CN => write!(f, "CN"),
+            Self::KR => write!(f, "KR"),
         }
     }
 }
@@ -27,6 +29,7 @@ const JOB_NAMES_EN: [&str; 8] = ["CRP", "BSM", "ARM", "GSM", "LTW", "WVR", "ALC"
 const JOB_NAMES_DE: [&str; 8] = ["ZMR", "GRS", "PLA", "GLD", "GER", "WEB", "ALC", "GRM"];
 const JOB_NAMES_FR: [&str; 8] = ["MEN", "FRG", "ARM", "ORF", "TAN", "COU", "ALC", "CUI"];
 const JOB_NAMES_CN: [&str; 8] = ["刻木", "锻铁", "铸甲", "雕金", "制革", "裁衣", "炼金", "烹调"];
+const JOB_NAMES_KR: [&str; 8] = ["목수", "대장", "갑주", "보석", "가죽", "재봉", "연금", "요리"];
 
 pub fn get_job_name(job_id: u8, locale: Locale) -> &'static str {
     match locale {
@@ -35,6 +38,7 @@ pub fn get_job_name(job_id: u8, locale: Locale) -> &'static str {
         Locale::FR => JOB_NAMES_FR[job_id as usize],
         Locale::JP => JOB_NAMES_EN[job_id as usize], // JP job abbreviations are the same as EN
         Locale::CN => JOB_NAMES_CN[job_id as usize],
+        Locale::KR => JOB_NAMES_KR[job_id as usize],
     }
 }
 
@@ -43,6 +47,7 @@ pub static ITEM_NAMES_DE: phf::Map<u32, &str> = include!("../data/item_names_de.
 pub static ITEM_NAMES_FR: phf::Map<u32, &str> = include!("../data/item_names_fr.rs");
 pub static ITEM_NAMES_JP: phf::Map<u32, &str> = include!("../data/item_names_jp.rs");
 pub static ITEM_NAMES_CN: phf::Map<u32, &str> = include!("../data/item_names_cn.rs");
+pub static ITEM_NAMES_KR: phf::Map<u32, &str> = include!("../data/item_names_kr.rs");
 
 pub fn get_item_name_raw(item_id: u32, locale: Locale) -> Option<&'static str> {
     match locale {
@@ -51,6 +56,7 @@ pub fn get_item_name_raw(item_id: u32, locale: Locale) -> Option<&'static str> {
         Locale::FR => ITEM_NAMES_FR.get(&item_id).copied(),
         Locale::JP => ITEM_NAMES_JP.get(&item_id).copied(),
         Locale::CN => ITEM_NAMES_CN.get(&item_id).copied(),
+        Locale::KR => ITEM_NAMES_KR.get(&item_id).copied(),
     }
 }
 
@@ -75,6 +81,7 @@ pub const fn action_name(action: Action, locale: Locale) -> &'static str {
         Locale::FR => action_name_fr(action),
         Locale::JP => action_name_jp(action),
         Locale::CN => action_name_cn(action),
+        Locale::KR => action_name_kr(action),
     }
 }
 
@@ -255,5 +262,41 @@ const fn action_name_cn(action: Action) -> &'static str {
         Action::TrainedPerfection => "工匠的绝技",
         Action::TrainedEye => "工匠的神速技巧",
         Action::QuickInnovation => "快速改革",
+    }
+}
+
+const fn action_name_kr(action: Action) -> &'static str {
+    match action {
+        Action::BasicSynthesis => "작업",
+        Action::BasicTouch => "가공",
+        Action::MasterMend => "능숙한 땜질",
+        Action::Observe => "경과 관찰",
+        Action::TricksOfTheTrade => "비결",
+        Action::WasteNot => "근검절약",
+        Action::Veneration => "공경",
+        Action::StandardTouch => "중급 가공",
+        Action::GreatStrides => "장족의 발전",
+        Action::Innovation => "혁신",
+        Action::WasteNot2 => "장기 절약",
+        Action::ByregotsBlessing => "비레고의 축복",
+        Action::PreciseTouch => "집중 가공",
+        Action::MuscleMemory => "확신",
+        Action::CarefulSynthesis => "모범 작업",
+        Action::Manipulation => "교묘한 손놀림",
+        Action::PrudentTouch => "절약 가공",
+        Action::AdvancedTouch => "상급 가공",
+        Action::Reflect => "진가",
+        Action::PreparatoryTouch => "밑가공",
+        Action::Groundwork => "밑작업",
+        Action::DelicateSynthesis => "정밀 작업",
+        Action::IntensiveSynthesis => "집중 작업",
+        Action::HeartAndSoul => "일심불란",
+        Action::PrudentSynthesis => "절약 작업",
+        Action::TrainedFinesse => "장인의 황금손",
+        Action::RefinedTouch => "세련 가공",
+        Action::ImmaculateMend => "완벽한 땜질",
+        Action::TrainedPerfection => "장인의 초절 기술",
+        Action::TrainedEye => "장인의 날랜손",
+        Action::QuickInnovation => "신속한 혁신",
     }
 }
