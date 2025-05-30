@@ -168,6 +168,7 @@ pub enum LoadOperation {
     LoadRotation,
     LoadRotationRecipe,
     LoadRotationRecipeConsumables,
+    LoadRotationRecipeConsumablesConfiguration,
 }
 
 impl std::fmt::Display for LoadOperation {
@@ -176,6 +177,8 @@ impl std::fmt::Display for LoadOperation {
             Self::LoadRotation => "Load rotation",
             Self::LoadRotationRecipe => "Load rotation & recipe",
             Self::LoadRotationRecipeConsumables => "Load rotation, recipe & consumables",
+            Self::LoadRotationRecipeConsumablesConfiguration =>
+                "Load rotation, recipe, consumables & configuration",
         };
         write!(f, "{}", output_str)
     }
@@ -261,6 +264,7 @@ struct RotationWidget<'a> {
     rotation: &'a Rotation,
     actions: &'a mut Vec<Action>,
     crafter_config: &'a mut CrafterConfig,
+    solver_config: &'a mut SolverConfig,
     recipe_config: &'a mut RecipeConfiguration,
     custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
     selected_food: &'a mut Option<Consumable>,
@@ -276,6 +280,7 @@ impl<'a> RotationWidget<'a> {
         rotation: &'a Rotation,
         actions: &'a mut Vec<Action>,
         crafter_config: &'a mut CrafterConfig,
+        solver_config: &'a mut SolverConfig,
         recipe_config: &'a mut RecipeConfiguration,
         custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
         selected_food: &'a mut Option<Consumable>,
@@ -289,6 +294,7 @@ impl<'a> RotationWidget<'a> {
             rotation,
             actions,
             crafter_config,
+            solver_config,
             recipe_config,
             custom_recipe_overrides_config,
             selected_food,
@@ -335,6 +341,7 @@ impl<'a> RotationWidget<'a> {
                         LoadOperation::LoadRotation,
                         LoadOperation::LoadRotationRecipe,
                         LoadOperation::LoadRotationRecipeConsumables,
+                        LoadOperation::LoadRotationRecipeConsumablesConfiguration,
                     ] {
                         let text = format!("{}", saved_rotation_load_operation);
                         if ui.button(text).clicked() {
@@ -368,6 +375,12 @@ impl<'a> RotationWidget<'a> {
                             self.actions.clone_from(&self.rotation.actions);
                             self.load_saved_recipe();
                             self.load_saved_consumables();
+                        }
+                        LoadOperation::LoadRotationRecipeConsumablesConfiguration => {
+                            self.actions.clone_from(&self.rotation.actions);
+                            self.load_saved_recipe();
+                            self.load_saved_consumables();
+                            self.load_saved_configuration();
                         }
                     }
                 }
@@ -427,6 +440,16 @@ impl<'a> RotationWidget<'a> {
                 .find(|potion| potion.item_id == item_id && potion.hq == hq)
                 .copied()
         });
+    }
+
+    fn load_saved_configuration(&mut self) {
+        if *self.crafter_config.active_stats() != self.rotation.crafter_stats {
+            self.crafter_config.detach_from_job();
+            *self.crafter_config.active_stats_mut() = self.rotation.crafter_stats;
+        }
+        if let Some(solve_info) = &self.rotation.solve_info {
+            *self.solver_config = solve_info.solver_config;
+        }
     }
 
     fn show_info_row(
@@ -532,6 +555,7 @@ pub struct SavedRotationsWidget<'a> {
     rotations: &'a mut SavedRotationsData,
     actions: &'a mut Vec<Action>,
     crafter_config: &'a mut CrafterConfig,
+    solver_config: &'a mut SolverConfig,
     recipe_config: &'a mut RecipeConfiguration,
     custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
     selected_food: &'a mut Option<Consumable>,
@@ -545,6 +569,7 @@ impl<'a> SavedRotationsWidget<'a> {
         rotations: &'a mut SavedRotationsData,
         actions: &'a mut Vec<Action>,
         crafter_config: &'a mut CrafterConfig,
+        solver_config: &'a mut SolverConfig,
         recipe_config: &'a mut RecipeConfiguration,
         custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
         selected_food: &'a mut Option<Consumable>,
@@ -556,6 +581,7 @@ impl<'a> SavedRotationsWidget<'a> {
             rotations,
             actions,
             crafter_config,
+            solver_config,
             recipe_config,
             custom_recipe_overrides_config,
             selected_food,
@@ -581,6 +607,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                         LoadOperation::LoadRotation,
                         LoadOperation::LoadRotationRecipe,
                         LoadOperation::LoadRotationRecipeConsumables,
+                        LoadOperation::LoadRotationRecipeConsumablesConfiguration,
                     ] {
                         let text = format!("{}", saved_rotation_load_operation);
                         ui.selectable_value(
@@ -620,6 +647,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             rotation,
                             self.actions,
                             self.crafter_config,
+                            self.solver_config,
                             self.recipe_config,
                             self.custom_recipe_overrides_config,
                             self.selected_food,
@@ -673,6 +701,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             rotation,
                             self.actions,
                             self.crafter_config,
+                            self.solver_config,
                             self.recipe_config,
                             self.custom_recipe_overrides_config,
                             self.selected_food,

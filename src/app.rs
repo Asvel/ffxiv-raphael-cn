@@ -494,6 +494,7 @@ impl eframe::App for MacroSolverApp {
                 &mut self.saved_rotations_data,
                 &mut self.actions,
                 &mut self.crafter_config,
+                &mut self.solver_config,
                 &mut self.recipe_config,
                 &mut self.custom_recipe_overrides_config,
                 &mut self.selected_food,
