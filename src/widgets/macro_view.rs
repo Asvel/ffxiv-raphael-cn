@@ -110,7 +110,9 @@ impl MacroTextBox {
                     &config.notification_config.custom_notification_format
                 };
 
-                lines.push(format_custom_notification(notification, index, max_index))
+                if !notification.is_empty() {
+                    lines.push(format_custom_notification(notification, index, max_index));
+                }
             }
         }
         Self {
@@ -294,7 +296,13 @@ impl Widget for MacroView<'_> {
                         let chunk_size = 15 - usize::from(self.config.macro_lock);
                         let avoid_notif = self.config.notification_config.avoid_single_action_macro
                             && remaining_actions.len() == chunk_size;
-                        let has_notif = self.config.notification_enabled && !avoid_notif;
+                        let empty_last = !self.config.notification_config.default_notification
+                            && self.config.notification_config.different_last_notification
+                            && self.config.notification_config
+                                .custom_last_notification_format.is_empty()
+                            && remaining_actions.len() <= chunk_size;
+                        let has_notif = self.config.notification_enabled && !avoid_notif
+                            && !empty_last;
                         chunk_size - usize::from(has_notif)
                     } else {
                         usize::MAX
