@@ -391,10 +391,11 @@ impl<'a> RotationWidget<'a> {
             match recipe_configuration {
                 RecipeInfo::NormalRecipe(recipe_id) => {
                     if let Some(recipe) = raphael_data::RECIPES.get(recipe_id) {
-                        *self.recipe_config = RecipeConfiguration {
-                            recipe: *recipe,
-                            quality_source: QualitySource::HqMaterialList([0; 6]),
-                        };
+                        if self.recipe_config.recipe.item_id != recipe.item_id {
+                            self.recipe_config.quality_source =
+                                QualitySource::HqMaterialList([0; 6]);
+                        }
+                        self.recipe_config.recipe = *recipe;
                         self.crafter_config.selected_job = recipe.job_id;
                         self.custom_recipe_overrides_config.use_custom_recipe = false;
                     } else {
