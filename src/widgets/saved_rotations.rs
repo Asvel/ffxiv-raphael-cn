@@ -8,7 +8,7 @@ use raphael_sim::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::SolverConfig,
+    app::{SolverConfig, MinimumStats},
     config::{
         CrafterConfig, CustomRecipeOverridesConfiguration, QualitySource, RecipeConfiguration,
     },
@@ -86,6 +86,8 @@ pub struct Rotation {
     pub food: Option<(u32, bool)>,
     pub potion: Option<(u32, bool)>,
     pub crafter_stats: CrafterStats,
+    #[serde(default)]
+    pub minimum_stats: MinimumStats,
 }
 
 impl Rotation {
@@ -99,6 +101,7 @@ impl Rotation {
         food: Option<Consumable>,
         potion: Option<Consumable>,
         crafter_config: &CrafterConfig,
+        minimum_stats: MinimumStats,
     ) -> Self {
         let solver_params = format!(
             "Raphael v{}{}{}",
@@ -130,6 +133,7 @@ impl Rotation {
             food: food.map(|consumable| (consumable.item_id, consumable.hq)),
             potion: potion.map(|consumable| (consumable.item_id, consumable.hq)),
             crafter_stats: *crafter_config.active_stats(),
+            minimum_stats,
         }
     }
 }
@@ -146,6 +150,7 @@ impl Clone for Rotation {
             food: self.food,
             potion: self.potion,
             crafter_stats: self.crafter_stats,
+            minimum_stats: self.minimum_stats,
         }
     }
 }
@@ -160,6 +165,7 @@ impl PartialEq for Rotation {
             && self.food == other.food
             && self.potion == other.potion
             && self.crafter_stats == other.crafter_stats
+            && self.minimum_stats == other.minimum_stats
     }
 }
 
@@ -395,6 +401,25 @@ impl<'a> RotationWidget<'a> {
                     self.rotation.actions.len(),
                     duration
                 ));
+                if self.rotation.minimum_stats.cp.is_some() {
+                    ui.add_space(-5.0);
+                    let display = |stat: Option<u16>| -> String {
+                        match stat {
+                            Some(stat) => stat.to_string(),
+                            None => "----".to_owned(),
+                        }
+                    };
+                    ui.label(format!(
+                        "{}/{}/{},",
+                        display(self.rotation.minimum_stats.craftsmanship),
+                        display(self.rotation.minimum_stats.control),
+                        display(self.rotation.minimum_stats.cp),
+                    ));
+                }
+                if let Some(solve) = &self.rotation.solve_info && solve.initial_quality > 0 {
+                    ui.add_space(-5.0);
+                    ui.label(format!("+{},", solve.initial_quality));
+                }
             });
         });
     }

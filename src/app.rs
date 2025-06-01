@@ -37,6 +37,13 @@ pub struct SolverConfig {
     pub adversarial: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MinimumStats {
+    pub craftsmanship: Option<u16>,
+    pub control: Option<u16>,
+    pub cp: Option<u16>,
+}
+
 #[cfg(any(debug_assertions, feature = "dev-panel"))]
 #[derive(Debug, Default)]
 struct DevPanelState {
@@ -78,6 +85,9 @@ pub struct MacroSolverApp {
 
     solver_events: Arc<Mutex<VecDeque<SolverEvent>>>,
     solver_interrupt: raphael_solver::AtomicFlag,
+
+    minimum_stats: MinimumStats,
+    minimum_stats_params_hash: u64,
 }
 
 impl MacroSolverApp {
@@ -143,6 +153,9 @@ impl MacroSolverApp {
 
             solver_events: Arc::new(Mutex::new(VecDeque::new())),
             solver_interrupt: raphael_solver::AtomicFlag::new(),
+
+            minimum_stats: MinimumStats::default(),
+            minimum_stats_params_hash: 0,
         }
     }
 }
@@ -541,6 +554,7 @@ impl eframe::App for MacroSolverApp {
 
 impl MacroSolverApp {
     fn process_solver_events(&mut self) {
+        let mut submit_new_rotation = false;
         let mut solver_events = self.solver_events.lock().unwrap();
         while let Some(event) = solver_events.pop_front() {
             match event {
@@ -552,43 +566,43 @@ impl MacroSolverApp {
                     self.solver_pending = false;
                     self.solver_interrupt.clear();
                     if exception.is_none() {
-                        let mut game_settings = raphael_data::get_game_settings(
-                            self.recipe_config.recipe,
-                            match self.custom_recipe_overrides_config.use_custom_recipe {
-                                true => Some(
-                                    self.custom_recipe_overrides_config.custom_recipe_overrides,
-                                ),
-                                false => None,
-                            },
-                            self.crafter_config.crafter_stats
-                                [self.crafter_config.selected_job as usize],
-                            self.selected_food,
-                            self.selected_potion,
-                        );
-                        game_settings.adversarial = self.solver_config.adversarial;
-                        game_settings.backload_progress = self.solver_config.backload_progress;
-                        let new_rotation = Rotation::new(
-                            raphael_data::get_item_name(
-                                self.recipe_config.recipe.item_id,
-                                false,
-                                self.locale,
-                            )
-                            .unwrap_or("Unknown item".to_owned()),
-                            self.actions.clone(),
-                            &self.recipe_config,
-                            &self.custom_recipe_overrides_config,
-                            &game_settings,
-                            &self.solver_config,
-                            self.selected_food,
-                            self.selected_potion,
-                            &self.crafter_config,
-                        );
-                        self.saved_rotations_sync_requests.push_back(Some(new_rotation));
+                        submit_new_rotation = true;
                     } else {
                         self.solver_error = exception;
                     }
                 }
             }
+        }
+        drop(solver_events);
+
+        if submit_new_rotation {
+            let game_settings = util::get_game_settings(
+                &self.recipe_config,
+                &self.custom_recipe_overrides_config,
+                &self.solver_config,
+                &self.crafter_config,
+                self.selected_food,
+                self.selected_potion,
+            );
+            self.find_minimum_stats(&game_settings);
+            let new_rotation = Rotation::new(
+                raphael_data::get_item_name(
+                    self.recipe_config.recipe.item_id,
+                    false,
+                    self.locale,
+                )
+                .unwrap_or("Unknown item".to_owned()),
+                self.actions.clone(),
+                &self.recipe_config,
+                &self.custom_recipe_overrides_config,
+                &game_settings,
+                &self.solver_config,
+                self.selected_food,
+                self.selected_potion,
+                &self.crafter_config,
+                self.minimum_stats,
+            );
+            self.saved_rotations_sync_requests.push_back(Some(new_rotation));
         }
     }
 
@@ -707,13 +721,18 @@ impl MacroSolverApp {
             .get(&self.recipe_config.recipe.item_id)
             .copied()
             .unwrap_or_default();
+        self.find_minimum_stats(&game_settings);
         ui.add(Simulator::new(
             &game_settings,
             initial_quality,
             self.solver_config,
-            &self.crafter_config,
+            &mut self.crafter_config,
             &self.actions,
+            &self.recipe_config.recipe,
             &item,
+            self.selected_food,
+            self.selected_potion,
+            &self.minimum_stats,
             self.locale,
         ));
     }
@@ -1162,6 +1181,101 @@ impl MacroSolverApp {
                 self.solver_interrupt.clone(),
             );
         }
+    }
+
+    fn find_minimum_stats(&mut self, game_settings: &raphael_sim::Settings) {
+        if self.solver_pending || self.custom_recipe_overrides_config.use_base_increase_overrides {
+            if self.minimum_stats_params_hash != 0 {
+                self.minimum_stats_params_hash = 0;
+                self.minimum_stats = MinimumStats::default();
+            }
+            return;
+        }
+
+        let mut game_settings = *game_settings;
+        let initial_quality = util::get_initial_quality(&self.recipe_config, &self.crafter_config);
+
+        let target_progress = game_settings.max_progress as u32;
+        let target_quality = self
+            .solver_config
+            .quality_target
+            .get_target(game_settings.max_quality)
+            .saturating_sub(initial_quality) as u32;
+
+        let params_hash = egui::Id::new((&game_settings, target_quality, &self.actions)).value();
+        if self.minimum_stats_params_hash == params_hash {
+            return;
+        }
+        self.minimum_stats_params_hash = params_hash;
+
+        let initial_state = raphael_sim::SimulationState::new(&game_settings);
+
+        let mut actual_result = initial_state;
+        for action in &self.actions {
+            actual_result = actual_result
+                .use_action(*action, raphael_sim::Condition::Normal, &game_settings)
+                .unwrap_or(actual_result);
+        }
+        if actual_result.progress < target_progress {
+            self.minimum_stats = MinimumStats::default();
+            return;
+        }
+        self.minimum_stats.cp = Some(game_settings.max_cp - actual_result.cp);
+
+        let (mut min_progress, mut max_progress) = (1u16, game_settings.base_progress);
+        let (mut min_quality, mut max_quality, mut can_target_quality) =
+            if actual_result.quality >= target_quality {
+                (1u16, game_settings.base_quality, true)
+            } else {
+                (game_settings.base_quality, game_settings.base_quality * 3 / 2, false)
+            };
+        if self.actions[0] == Action::TrainedEye {
+            max_quality = 1;
+        }
+        while min_progress + 1 < max_progress || min_quality + 1 < max_quality {
+            let mut state = initial_state;
+            game_settings.base_progress = (min_progress + max_progress) / 2;
+            game_settings.base_quality = (min_quality + max_quality) / 2;
+            for action in &self.actions {
+                state = state
+                    .use_action(*action, raphael_sim::Condition::Normal, &game_settings)
+                    .unwrap_or(state);
+            }
+            if state.progress < target_progress {
+                min_progress = game_settings.base_progress;
+            } else {
+                max_progress = game_settings.base_progress;
+            }
+            if state.quality < target_quality {
+                min_quality = game_settings.base_quality;
+            } else {
+                max_quality = game_settings.base_quality;
+                can_target_quality = true;
+            }
+        }
+
+        let max_level_scaling = self.recipe_config.recipe.max_level_scaling;
+        let rlvl = if max_level_scaling != 0 {
+            let job_level = std::cmp::min(max_level_scaling, game_settings.job_level);
+            raphael_data::LEVEL_ADJUST_TABLE[job_level as usize] as usize
+        } else {
+            self.recipe_config.recipe.recipe_level as usize
+        };
+        let rlvl_record = raphael_data::RLVLS[rlvl];
+        let mut craftsmanship = max_progress as f32;
+        let mut control = max_quality as f32;
+        if game_settings.job_level <= rlvl_record.job_level {
+            craftsmanship = craftsmanship * 100.0 / rlvl_record.progress_mod as f32;
+            control = control * 100.0 / rlvl_record.quality_mod as f32;
+        }
+        craftsmanship = (craftsmanship - 2.0) * rlvl_record.progress_div as f32 / 10.0;
+        control = (control - 35.0) * rlvl_record.quality_div as f32 / 10.0;
+        self.minimum_stats.craftsmanship = Some(craftsmanship.ceil() as u16);
+        self.minimum_stats.control = if can_target_quality {
+            Some(control.ceil() as u16)
+        } else {
+            None
+        };
     }
 
     fn draw_macro_output_widget(&mut self, ui: &mut egui::Ui) {
