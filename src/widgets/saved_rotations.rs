@@ -82,6 +82,8 @@ pub struct Rotation {
     #[serde(default)]
     pub recipe_info: Option<RecipeInfo>,
     #[serde(default)]
+    pub quality_source: Option<QualitySource>,
+    #[serde(default)]
     pub solve_info: Option<SolveInfo>,
     pub food: Option<(u32, bool)>,
     pub potion: Option<(u32, bool)>,
@@ -125,6 +127,7 @@ impl Rotation {
                 &recipe_config.recipe,
                 custom_recipe_overrides_configuration,
             )),
+            quality_source: Some(recipe_config.quality_source),
             solve_info: Some(SolveInfo::new(
                 game_settings,
                 initial_quality,
@@ -146,6 +149,7 @@ impl Clone for Rotation {
             solver: self.solver.clone(),
             actions: self.actions.clone(),
             recipe_info: self.recipe_info.clone(),
+            quality_source: self.quality_source.clone(),
             solve_info: self.solve_info.clone(),
             food: self.food,
             potion: self.potion,
@@ -161,6 +165,7 @@ impl PartialEq for Rotation {
         self.solver == other.solver
             && self.actions == other.actions
             && self.recipe_info == other.recipe_info
+            && self.quality_source == other.quality_source
             && self.solve_info == other.solve_info
             && self.food == other.food
             && self.potion == other.potion
@@ -449,6 +454,9 @@ impl<'a> RotationWidget<'a> {
                     self.crafter_config.selected_job = recipe.job_id;
                 }
             }
+        }
+        if let Some(quality_source) = &self.rotation.quality_source {
+            self.recipe_config.quality_source = *quality_source;
         }
     }
 

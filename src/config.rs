@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use raphael_data::{CrafterStats, CustomRecipeOverrides, Recipe};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum QualitySource {
     HqMaterialList([u8; 6]),
     Value(u16),
