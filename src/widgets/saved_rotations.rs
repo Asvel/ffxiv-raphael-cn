@@ -741,6 +741,12 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             self.selected_potion,
                         ));
                         if pinned {
+                            if rotation.recipe_info.is_some() {
+                                let mut item_same: Vec<_> = self.rotations.pinned
+                                    .extract_if(.., |r| r.recipe_info == rotation.recipe_info)
+                                    .collect();
+                                self.rotations.pinned.append(&mut item_same);
+                            }
                             self.rotations.pinned.push(rotation.clone());
                         }
                         !pinned && !deleted
