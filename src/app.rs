@@ -1229,7 +1229,7 @@ impl MacroSolverApp {
             } else {
                 (game_settings.base_quality, game_settings.base_quality * 3 / 2, false)
             };
-        if self.actions[0] == Action::TrainedEye {
+        if target_quality == 0 || self.actions[0] == Action::TrainedEye {
             max_quality = 1;
         }
         while min_progress + 1 < max_progress || min_quality + 1 < max_quality {
