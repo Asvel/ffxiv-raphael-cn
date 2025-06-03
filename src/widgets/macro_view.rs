@@ -85,14 +85,18 @@ impl MacroTextBox {
             lines.push("/macrolock ".to_string());
         }
         lines.extend(actions.iter().map(|action| {
+            let q = match locale {
+                Locale::JP | Locale::CN => "",
+                _ => "\"",
+            };
             if config.include_delay {
                 format!(
-                    "/ac \"{}\" <wait.{}>",
+                    "/ac {q}{}{q} <wait.{}>",
                     action_name(*action, locale),
                     action.time_cost() + config.extra_delay
                 )
             } else {
-                format!("/ac \"{}\"", action_name(*action, locale))
+                format!("/ac {q}{}{q}", action_name(*action, locale))
             }
         }));
         if config.notification_enabled && lines.len() < 15 {
