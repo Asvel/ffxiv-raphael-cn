@@ -27,10 +27,7 @@ fn test_manipulation_refund() {
         base_progress: 100,
         base_quality: 100,
         job_level: 100,
-        allowed_actions: ActionMask::all()
-            .remove(Action::TrainedEye)
-            .remove(Action::HeartAndSoul)
-            .remove(Action::QuickInnovation),
+        allowed_actions: ActionMask::regular(),
         adversarial: false,
         backload_progress: false,
     };
@@ -44,12 +41,12 @@ fn test_manipulation_refund() {
 fn check_consistency(solver_settings: SolverSettings) {
     let mut solver = QualityUbSolver::new(solver_settings, Default::default());
     solver.precompute();
-    let mut rng = rand::rng();
-    for _ in 0..100000 {
-        let state = random_state(&solver_settings, &mut rng);
+    for state in generate_random_states(solver_settings, 1_000_000)
+        .filter(|state| state.effects.combo() == Combo::None)
+    {
         let state_upper_bound = solver.quality_upper_bound(state).unwrap();
         for action in FULL_SEARCH_ACTIONS {
-            let child_upper_bound = match use_action_combo(&solver_settings, state, *action) {
+            let child_upper_bound = match use_action_combo(&solver_settings, state, action) {
                 Ok(child) => match child.is_final(&solver_settings.simulator_settings) {
                     false => solver.quality_upper_bound(child).unwrap(),
                     true if child.progress >= u32::from(solver_settings.max_progress()) => {
