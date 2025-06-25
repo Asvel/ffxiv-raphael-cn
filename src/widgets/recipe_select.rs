@@ -76,6 +76,12 @@ impl<'a> RecipeSelect<'a> {
             let search_cache = mem.caches.cache::<SearchCache<'_>>();
             search_result = search_cache.get((&search_text, self.locale));
         });
+        if !search_text.is_empty() {
+            let mut other_job: Vec<_> = search_result.extract_if(.., |recipe_id| {
+                raphael_data::RECIPES[recipe_id].job_id != self.crafter_config.selected_job
+            }).collect();
+            search_result.append(&mut other_job);
+        }
 
         ui.ctx().data_mut(|data| {
             data.insert_persisted(Id::new("RECIPE_SEARCH_TEXT"), search_text);
