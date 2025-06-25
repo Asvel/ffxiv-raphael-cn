@@ -12,6 +12,13 @@ impl ItemNameLabel {
             text: get_item_name(item_id, hq, locale).unwrap_or("Unknown item".to_owned()),
         }
     }
+    pub fn from_recipe(recipe: &raphael_data::Recipe, hq: bool, locale: Locale) -> Self {
+        Self {
+            item_id: recipe.item_id,
+            text: raphael_data::get_recipe_name(recipe, hq, locale)
+                .unwrap_or("Unknown item".to_owned()),
+        }
+    }
 }
 
 impl egui::Widget for ItemNameLabel {

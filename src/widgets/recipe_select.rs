@@ -117,7 +117,7 @@ impl<'a> RecipeSelect<'a> {
                     ui.label(get_job_name(recipe.job_id, self.locale));
                 });
                 row.col(|ui| {
-                    ui.add(ItemNameLabel::new(recipe.item_id, false, self.locale));
+                    ui.add(ItemNameLabel::from_recipe(&recipe, false, self.locale));
                 });
             });
         });
@@ -292,8 +292,8 @@ impl Widget for RecipeSelect<'_> {
                         &mut collapsed,
                     );
                     ui.label(egui::RichText::new("Recipe").strong());
-                    ui.add(ItemNameLabel::new(
-                        self.recipe_config.recipe.item_id,
+                    ui.add(ItemNameLabel::from_recipe(
+                        &self.recipe_config.recipe,
                         false,
                         self.locale,
                     ));

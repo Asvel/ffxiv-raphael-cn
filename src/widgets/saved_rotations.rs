@@ -324,7 +324,7 @@ impl<'a> RotationWidget<'a> {
                 match &self.rotation.recipe_info {
                     Some(RecipeInfo::NormalRecipe(recipe_id)) => {
                         raphael_data::RECIPES.get(recipe_id).and_then(|recipe| {
-                            raphael_data::get_item_name(recipe.item_id, false, self.locale)
+                            raphael_data::get_recipe_name(recipe, false, self.locale)
                         })
                     }
                     _ => None,
@@ -524,7 +524,7 @@ impl<'a> RotationWidget<'a> {
             self.show_info_row(
                 ui,
                 "Recipe",
-                raphael_data::get_item_name(recipe.item_id, false, self.locale)
+                raphael_data::get_recipe_name(recipe, false, self.locale)
                     .unwrap_or("Unknown item".to_owned()),
             );
         }

@@ -586,8 +586,8 @@ impl MacroSolverApp {
             );
             self.find_minimum_stats(&game_settings);
             let new_rotation = Rotation::new(
-                raphael_data::get_item_name(
-                    self.recipe_config.recipe.item_id,
+                raphael_data::get_recipe_name(
+                    &self.recipe_config.recipe,
                     false,
                     self.locale,
                 )
