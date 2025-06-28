@@ -207,3 +207,11 @@ pub fn hq_percentage(quality: impl Into<u32>, max_quality: impl Into<u32>) -> Op
     let ratio = (quality * 100).checked_div(max_quality)?;
     Some(HQ_LOOKUP[std::cmp::min(ratio as usize, 100)])
 }
+
+pub fn is_cosmic_recipe(item_id: u32) -> bool {
+    // hardcode here (rather than put into Item struct) to avoid git merge hell
+    match item_id {
+        46830..=47740 | 48238..=48634 => true,
+        _ => false,
+    }
+}

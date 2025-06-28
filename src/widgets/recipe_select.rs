@@ -115,7 +115,13 @@ impl<'a> RecipeSelect<'a> {
                         self.crafter_config.selected_job = recipe.job_id;
                         *self.recipe_config = RecipeConfiguration {
                             recipe,
-                            quality_source: QualitySource::HqMaterialList([0; 6]),
+                            quality_source: QualitySource::HqMaterialList(
+                                if raphael_data::is_cosmic_recipe(recipe.item_id) {
+                                    recipe.ingredients.map(|ingredient| ingredient.amount as u8)
+                                } else {
+                                    [0; 6]
+                                }
+                            ),
                         }
                     }
                 });

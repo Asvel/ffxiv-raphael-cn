@@ -75,23 +75,20 @@ pub fn get_item_name(item_id: u32, hq: bool, locale: Locale) -> Option<String> {
 }
 
 pub fn get_recipe_name(recipe: &crate::Recipe, hq: bool, locale: Locale) -> Option<String> {
-    let item_id = recipe.item_id;
-    match item_id {
-        // Cosmic Exploration recipes, hardcode here to avoid git merge hell
-        48238..=48634 => {
-            let item_name = get_item_name_raw(item_id, locale)?;
-            let item_entry = ITEMS.get(&item_id);
-            let collectable = match item_entry.is_some_and(|item| item.always_collectable) {
-                true => " \u{e03d}",
-                false => ""
-            };
-            let rlvl_record = crate::RLVLS[recipe.recipe_level as usize];
-            let progress = (rlvl_record.max_progress * recipe.progress_factor / 100) as u16;
-            let quality = (rlvl_record.max_quality * recipe.quality_factor / 100) as u16;
-            let durability = rlvl_record.max_durability * recipe.durability_factor / 100;
-            Some(format!("{item_name}[{progress}/{quality}/{durability}]{collectable}"))
-        },
-        _ => get_item_name(item_id, hq, locale),
+    if crate::is_cosmic_recipe(recipe.item_id) {
+        let item_name = get_item_name_raw(recipe.item_id, locale)?;
+        let item_entry = ITEMS.get(&recipe.item_id);
+        let collectable = match item_entry.is_some_and(|item| item.always_collectable) {
+            true => " \u{e03d}",
+            false => ""
+        };
+        let rlvl_record = crate::RLVLS[recipe.recipe_level as usize];
+        let progress = (rlvl_record.max_progress * recipe.progress_factor / 100) as u16;
+        let quality = (rlvl_record.max_quality * recipe.quality_factor / 100) as u16;
+        let durability = rlvl_record.max_durability * recipe.durability_factor / 100;
+        Some(format!("{item_name}[{progress}/{quality}/{durability}]{collectable}"))
+    } else {
+        get_item_name(recipe.item_id, hq, locale)
     }
 }
 
