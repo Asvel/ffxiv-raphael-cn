@@ -27,6 +27,7 @@ type SearchCache<'a> = FrameCache<Vec<u32>, RecipeFinder>;
 
 pub struct RecipeSelect<'a> {
     crafter_config: &'a mut CrafterConfig,
+    solver_config: &'a mut crate::app::SolverConfig,
     recipe_config: &'a mut RecipeConfiguration,
     custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
     selected_food: Option<Consumable>, // used for base prog/qual display
@@ -37,6 +38,7 @@ pub struct RecipeSelect<'a> {
 impl<'a> RecipeSelect<'a> {
     pub fn new(
         crafter_config: &'a mut CrafterConfig,
+        solver_config: &'a mut crate::app::SolverConfig,
         recipe_config: &'a mut RecipeConfiguration,
         custom_recipe_overrides_config: &'a mut CustomRecipeOverridesConfiguration,
         selected_food: Option<Consumable>,
@@ -45,6 +47,7 @@ impl<'a> RecipeSelect<'a> {
     ) -> Self {
         Self {
             crafter_config,
+            solver_config,
             recipe_config,
             custom_recipe_overrides_config,
             selected_food,
@@ -113,6 +116,12 @@ impl<'a> RecipeSelect<'a> {
                 row.col(|ui| {
                     if ui.button("Select").clicked() {
                         self.crafter_config.selected_job = recipe.job_id;
+                        if self.recipe_config.recipe.quality_factor != recipe.quality_factor
+                            || self.recipe_config.recipe.recipe_level != recipe.recipe_level
+                        {
+                            self.solver_config.quality_target =
+                                crate::config::QualityTarget::default();
+                        }
                         *self.recipe_config = RecipeConfiguration {
                             recipe,
                             quality_source: QualitySource::HqMaterialList(

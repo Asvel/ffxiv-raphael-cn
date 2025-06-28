@@ -741,6 +741,7 @@ impl MacroSolverApp {
         ui.vertical(|ui| {
             ui.add(RecipeSelect::new(
                 &mut self.crafter_config,
+                &mut self.solver_config,
                 &mut self.recipe_config,
                 &mut self.custom_recipe_overrides_config,
                 self.selected_food,
