@@ -9,22 +9,22 @@ It produces crafting macros that are tailored to your stats.
 
 ## Contents <!-- omit in toc -->
 
-* [Optimal macro selection](#optimal-macro-selection)
-* [How does it work?](#how-does-it-work)
-* [Building from source](#building-from-source)
-  * [Native GUI](#native-gui)
-  * [Native CLI](#native-cli)
-* [Contributing](#contributing)
+- [Optimal macro selection](#optimal-macro-selection)
+- [How does it work?](#how-does-it-work)
+- [Building from source](#building-from-source)
+  - [Native GUI](#native-gui)
+  - [Native CLI](#native-cli)
+- [Contributing](#contributing)
 
 ## Optimal macro selection
 
 The following is the specification of how the optimal macro is selected:
 
-* The generated macro must be able to finish the synthesis, i.e. reach 100% progress.
-* Valid macros are then ranked based on these criteria, in order:
-  * Quality reached, capped at the target quality defined in the solver configuration. (Higher is better)
-  * Number of macro steps. (Lower is better)
-  * Total macro duration, in seconds. (Lower is better)
+- The generated macro must be able to finish the synthesis, i.e. reach 100% progress.
+- Valid macros are then ranked based on these criteria, in order:
+  - Quality reached, capped at the target quality defined in the solver configuration. (Higher is better)
+  - Number of macro steps. (Lower is better)
+  - Total macro duration, in seconds. (Lower is better)
 
 Anything not mentioned in the above specification is not guaranteed to be taken into account.
 If you would like to change/amend the specification, please submit a feature request.
@@ -33,13 +33,13 @@ If you find a macro that beats the generated macro according to the specificatio
 
 ## How does it work?
 
-* Short answer: Branch-and-bound, best-first-search, dynamic programming, Pareto optimization.
-* Long answer: [Algorithm Overview](https://github.com/KonaeAkira/raphael-rs/wiki/Algorithm-Overview)
+- Short answer: Branch-and-bound, best-first-search, dynamic programming, Pareto optimization.
+- Long answer: [Algorithm Overview](https://github.com/KonaeAkira/raphael-rs/wiki/Algorithm-Overview)
 
 ## Building from source
 
 The [Rust](https://www.rust-lang.org/) toolchain is required to build the solver.
-The current minimal supported Rust version (MSRV) is 1.89.0.
+The current minimal supported Rust version (MSRV) is 1.92.0.
 
 ### Native GUI
 
@@ -58,6 +58,7 @@ cargo run --release --package raphael-cli -- <cli-args>
 ```
 
 The CLI currently supports searching for items and solving for crafting rotations. Run the following to see the relevant help messages:
+
 ```
 cargo run --release --package raphael-cli -- --help
 cargo run --release --package raphael-cli -- search --help
@@ -65,6 +66,7 @@ cargo run --release --package raphael-cli -- solve --help
 ```
 
 Some basic examples:
+
 ```
 cargo run --release --package raphael-cli -- search --pattern "Fiberboard"
 cargo run --release --package raphael-cli -- solve --recipe-id 36183 --stats 5400 4900 600
@@ -86,6 +88,7 @@ If you already have something in mind, feel free to open a pull request.
 Although ideally, you would discuss your idea on [Discord](https://discord.com/invite/m2aCy3y8he) beforehand to make sure it fits the general direction of the project and that no one else is already working on it.
 
 Before submitting a pull request, make sure all tests are ok by running:
+
 ```
 cargo test --workspace
 ```

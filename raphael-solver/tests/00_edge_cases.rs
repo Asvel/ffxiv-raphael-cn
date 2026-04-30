@@ -146,13 +146,13 @@ fn zero_quality() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 31147,
-                states_on_shards: 0,
-                values: 109398,
+                states_on_shards: 4301,
+                values: 120278,
             },
             step_lb_stats: StepLbSolverStats {
-                states_on_main: 26538,
+                states_on_main: 0,
                 states_on_shards: 0,
-                values: 194222,
+                values: 0,
             },
         }
     "#]];
@@ -200,8 +200,8 @@ fn max_quality() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 389796,
-                states_on_shards: 514,
-                values: 2236380,
+                states_on_shards: 517,
+                values: 2236383,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 26538,
@@ -254,8 +254,8 @@ fn large_progress_quality_increase() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 2208900,
-                states_on_shards: 22,
-                values: 8280016,
+                states_on_shards: 26,
+                values: 8280020,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 320,
@@ -308,8 +308,8 @@ fn backload_progress_single_delicate_synthesis() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 3243,
-                states_on_shards: 0,
-                values: 3243,
+                states_on_shards: 3,
+                values: 3246,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 1,
@@ -363,8 +363,8 @@ fn issue_216_steplbsolver_crash() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 318520,
-                states_on_shards: 0,
-                values: 1267763,
+                states_on_shards: 6,
+                values: 1267769,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 36739,
@@ -418,8 +418,8 @@ fn issue_312_quick_innovation_reflect() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 28849,
-                states_on_shards: 1,
-                values: 33547,
+                states_on_shards: 2,
+                values: 33548,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 46,
@@ -486,8 +486,8 @@ fn daring_touch_interrupted_combo() {
             },
             quality_ub_stats: QualityUbSolverStats {
                 states_on_main: 22280,
-                states_on_shards: 43,
-                values: 26453,
+                states_on_shards: 44,
+                values: 26454,
             },
             step_lb_stats: StepLbSolverStats {
                 states_on_main: 403,
@@ -507,4 +507,35 @@ fn daring_touch_interrupted_combo() {
             Action::RapidSynthesis
         ]
     );
+}
+
+#[test]
+#[ignore]
+/// https://github.com/KonaeAkira/raphael-rs/issues/298
+fn low_level_steplbsolver_crash() {
+    let simulator_settings = Settings {
+        max_cp: 10,
+        max_durability: 60,
+        max_progress: 45,
+        max_quality: 250,
+        base_progress: 22,
+        base_quality: 68,
+        job_level: 6,
+        allowed_actions: ActionMask::regular(),
+        adversarial: false,
+        backload_progress: false,
+        stellar_steady_hand_charges: 0,
+    };
+    let solver_settings = SolverSettings {
+        simulator_settings,
+        allow_non_max_quality_solutions: true,
+    };
+    let expected_score = expect![[r#"
+        TODO
+    "#]];
+    let expected_runtime_stats = expect![[r#"
+        TODO
+    "#]];
+    let actions = test_with_settings(solver_settings, expected_score, expected_runtime_stats);
+    assert_eq!(actions, []);
 }

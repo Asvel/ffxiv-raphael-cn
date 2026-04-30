@@ -159,7 +159,7 @@ impl<'a> RecipeSelect<'a> {
                 let mut search_result = ui.ctx().memory_mut(|mem| {
                     mem.caches
                         .cache::<RecipeSearchCache<'_>>()
-                        .get((&search_text, locale))
+                        .get((&search_text, locale)).clone()
                 });
                 if !search_text.is_empty() {
                     let mut other_job: Vec<_> = search_result.extract_if(.., |(recipe_id, _)| {
@@ -174,7 +174,7 @@ impl<'a> RecipeSelect<'a> {
                 let search_result = ui.ctx().memory_mut(|mem| {
                     mem.caches
                         .cache::<StellarMissionSearchCache<'_>>()
-                        .get((&search_text, locale))
+                        .get((&search_text, locale)).clone()
                 });
                 self.draw_mission_recipe_select(ui, search_result);
             }
