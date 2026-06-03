@@ -1105,7 +1105,7 @@ impl ActionImpl for HastyTouch {
     const EFFECT_RESET_MASK: Effects = DEFAULT_EFFECT_RESET_MASK
         .with_great_strides(0)
         .with_trained_perfection_active(false);
-    const EFFECT_SET_MASK: Effects = Effects::new().with_expedience(true);
+    const EFFECT_SET_MASK: Effects = Effects::new();
 
     fn precondition(
         state: &SimulationState,
@@ -1117,6 +1117,10 @@ impl ActionImpl for HastyTouch {
         if state.effects.stellar_steady_hand() == 0 {
             return Err(ActionError::UnreliableAction);
         }
+        if state.effects.expedience() {
+            // Hasty Touch gets upgraded to Daring Touch when expedience is active.
+            return Err(ActionError::SpecialConditionNotMet);
+        }
         Ok(())
     }
 
@@ -1126,6 +1130,12 @@ impl ActionImpl for HastyTouch {
 
     fn base_durability_cost(_state: &SimulationState, _settings: &Settings) -> u16 {
         10
+    }
+
+    fn transform(state: &mut SimulationState, settings: &Settings, _condition: Condition) {
+        if settings.job_level >= DaringTouch::LEVEL_REQUIREMENT {
+            state.effects.set_expedience(true);
+        }
     }
 }
 

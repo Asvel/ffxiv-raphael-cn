@@ -719,6 +719,32 @@ fn test_hasty_touch() {
     // Test that Hasty Touch cannot be used if Stellar Steady Hand is not active.
     let state = SimulationState::from_macro(&settings, &[Action::HastyTouch]);
     assert_eq!(Err(ActionError::UnreliableAction), state);
+    // Test that Hasty Touch cannot be used if expedience is active.
+    let state = SimulationState::from_macro(
+        &settings,
+        &[
+            Action::StellarSteadyHand,
+            Action::HastyTouch,
+            Action::HastyTouch,
+        ],
+    );
+    assert_eq!(Err(ActionError::SpecialConditionNotMet), state);
+    // Test that Hasty Touch doesn't apply Expedience when level requirement is not met.
+    let settings = Settings {
+        stellar_steady_hand_charges: 1,
+        job_level: 90,
+        ..SETTINGS
+    };
+    let state = SimulationState::from_macro(
+        &settings,
+        &[
+            Action::StellarSteadyHand,
+            Action::HastyTouch,
+            Action::HastyTouch,
+        ],
+    )
+    .unwrap();
+    assert_eq!(state.effects.expedience(), false);
 }
 
 #[test]
