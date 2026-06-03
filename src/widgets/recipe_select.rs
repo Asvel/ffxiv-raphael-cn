@@ -107,17 +107,25 @@ impl<'a> RecipeSelect<'a> {
             id: recipe_id,
             data: recipe,
         };
+        let stellar_mission_id = raphael_data::RECIPE_TO_STELLAR_MISSION_LINKS.get(recipe_id);
         *self.recipe_config = RecipeConfiguration {
             recipe_source,
             quality_source: QualitySource::HqMaterialList(
-                if raphael_data::STELLAR_ITEMS.contains(&recipe.item_id) {
+                if stellar_mission_id.is_some() {
                     recipe.ingredients.map(|ingredient| ingredient.amount as u8)
                 } else {
                     [0; 6]
                 }
             ),
         };
-        self.solver_config.stellar_steady_hand_charges = 0;
+        self.solver_config.stellar_steady_hand_charges =
+            match stellar_mission_id.map(|id| {
+                raphael_data::STELLAR_MISSIONS[*id].stellar_steady_hand_charges
+            }) {
+                None => 0,
+                Some(0) => 0,
+                _ => 1,
+            };
     }
 
     fn draw_normal_recipe_select(&mut self, ui: &mut egui::Ui) {
