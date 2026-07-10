@@ -66,6 +66,102 @@ pub enum SolveStatus {
     },
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MinimumStats {
+    pub craftsmanship: Option<u16>,
+    pub control: Option<u16>,
+    pub cp: Option<u16>,
+}
+
+impl MinimumStats {
+    fn find(&mut self, app_context: &AppContext, actions: &[Action]) {
+        if let crate::config::RecipeSource::Custom { overrides, .. } =
+                app_context.recipe_config.recipe_source
+            && overrides.base_progress_override.is_some()
+        {
+            return;
+        }
+
+        let mut game_settings = app_context.game_settings();
+        let initial_quality = app_context.initial_quality();
+
+        let target_progress = game_settings.max_progress;
+        let target_quality = app_context
+            .solver_config
+            .quality_target
+            .get_target(game_settings.max_quality)
+            .saturating_sub(initial_quality);
+
+        let initial_state = raphael_sim::SimulationState::new(&game_settings);
+
+        let mut actual_result = initial_state;
+        for action in actions {
+            actual_result = actual_result
+                .use_action(*action, raphael_sim::Condition::Normal, &game_settings)
+                .unwrap_or(actual_result);
+        }
+        if actual_result.progress < target_progress {
+            return;
+        }
+        self.cp = Some(game_settings.max_cp - actual_result.cp);
+
+        let (mut min_progress, mut max_progress) = (1u16, game_settings.base_progress);
+        let (mut min_quality, mut max_quality, mut can_target_quality) =
+            if actual_result.quality >= target_quality {
+                (1u16, game_settings.base_quality, true)
+            } else {
+                (game_settings.base_quality, game_settings.base_quality * 3 / 2, false)
+            };
+        if target_quality == 0 || actions[0] == Action::TrainedEye {
+            max_quality = 1;
+        }
+        while min_progress + 1 < max_progress || min_quality + 1 < max_quality {
+            let mut state = initial_state;
+            game_settings.base_progress = (min_progress + max_progress) / 2;
+            game_settings.base_quality = (min_quality + max_quality) / 2;
+            for action in actions {
+                state = state
+                    .use_action(*action, raphael_sim::Condition::Normal, &game_settings)
+                    .unwrap_or(state);
+            }
+            if state.progress < target_progress {
+                min_progress = game_settings.base_progress;
+            } else {
+                max_progress = game_settings.base_progress;
+            }
+            if state.quality < target_quality {
+                min_quality = game_settings.base_quality;
+            } else {
+                max_quality = game_settings.base_quality;
+                can_target_quality = true;
+            }
+        }
+
+        let max_level_scaling = app_context.recipe_config.recipe().max_level_scaling;
+        let rlvl = if max_level_scaling != 0 {
+            let job_level = std::cmp::min(max_level_scaling, game_settings.job_level);
+            raphael_data::LEVEL_ADJUST_TABLE[job_level as usize] as usize
+        } else {
+            app_context.recipe_config.recipe().recipe_level as usize
+        };
+        let rlvl_record = raphael_data::RLVLS[rlvl];
+        let mut craftsmanship = max_progress as f32;
+        let mut control = max_quality as f32;
+        if game_settings.job_level <= rlvl_record.job_level {
+            craftsmanship = craftsmanship * 100.0 / rlvl_record.progress_mod as f32;
+            control = control * 100.0 / rlvl_record.quality_mod as f32;
+        }
+        craftsmanship = (craftsmanship - 2.0) * rlvl_record.progress_div as f32 / 10.0;
+        control = (control - 35.0) * rlvl_record.quality_div as f32 / 10.0;
+        self.craftsmanship = Some(craftsmanship.ceil() as u16);
+        self.control = if can_target_quality {
+            Some(control.ceil() as u16)
+        } else {
+            None
+        };
+    }
+}
+
 #[derive(Debug)]
 pub struct LastSolveInfo {
     pub solve_params: SolveParameters,
@@ -76,7 +172,8 @@ pub struct LastSolveInfo {
 #[derive(Debug, Default)]
 pub struct SolveState {
     status: SolveStatus,
-    actions: Vec<Action>,
+    pub actions: Vec<Action>,
+    pub minimum_stats: MinimumStats,
 
     last_solve_info: Option<LastSolveInfo>,
 
@@ -162,12 +259,15 @@ impl SolveState {
                                 _ => self.status = SolveStatus::Failed { error: exception },
                             },
                             None => {
+                                self.minimum_stats.find(app_context, &self.actions);
                                 let new_rotation =
-                                    Rotation::new(info, self.actions.clone(), app_context.locale);
-                                app_context.saved_rotations_data.add_solved_rotation(
-                                    new_rotation,
-                                    &app_context.saved_rotations_config,
-                                );
+                                    Rotation::new(
+                                        info,
+                                        self.actions.clone(),
+                                        self.minimum_stats,
+                                        app_context.locale,
+                                    );
+                                app_context.saved_rotations_sync_requests.push_back(Some(new_rotation));
                                 self.status = SolveStatus::Idle;
                             }
                         }
@@ -189,6 +289,7 @@ impl SolveState {
             }
         }
 
+        self.minimum_stats = MinimumStats::default();
         self.solver_interrupt.clear();
 
         let mut game_settings = app_context.game_settings();

@@ -5,6 +5,7 @@ use crate::{
     config::{AppConfig, CrafterConfig, QualitySource, QualityTarget, RecipeConfiguration},
     elements::panels::{
         MacroViewConfig, RecipeSearchDomain, SavedRotationsConfig, SavedRotationsData,
+        Rotation,
     },
 };
 
@@ -99,6 +100,7 @@ pub struct AppContext {
     pub macro_view_config: MacroViewConfig,
     pub saved_rotations_config: SavedRotationsConfig,
     pub saved_rotations_data: SavedRotationsData,
+    pub saved_rotations_sync_requests: std::collections::VecDeque<Option<Rotation>>,
 }
 
 impl AppContext {
@@ -119,6 +121,7 @@ impl AppContext {
                 SavedRotationsConfig::default(),
             ),
             saved_rotations_data: load(cc, "SAVED_ROTATIONS", SavedRotationsData::default()),
+            saved_rotations_sync_requests: std::collections::VecDeque::new(),
         }
     }
 

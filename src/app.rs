@@ -18,6 +18,7 @@ use crate::{
 pub struct MacroSolverApp {
     app_context: AppContext,
 
+    main_window_focused_at: Option<std::time::Instant>,
     stats_edit_window_open: bool,
     saved_rotations_window_open: bool,
     missing_stats_error_window_open: bool,
@@ -55,6 +56,7 @@ impl MacroSolverApp {
         Self {
             app_context,
 
+            main_window_focused_at: None,
             stats_edit_window_open: false,
             saved_rotations_window_open: false,
             missing_stats_error_window_open: false,
@@ -74,8 +76,12 @@ impl eframe::App for MacroSolverApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let locale = self.app_context.locale;
 
+        self.set_window_title(ui);
+
         self.solve_state
             .process_solver_events(&mut self.app_context);
+
+        self.process_storage_syncing(ui, _frame);
 
         #[cfg(not(target_arch = "wasm32"))]
         crate::update::show_dialogues(ui, locale);
@@ -250,22 +256,14 @@ impl eframe::App for MacroSolverApp {
                         ui.add(
                             egui::Hyperlink::from_label_and_url(
                                 t!(locale, "View source on GitHub"),
-                                "https://github.com/KonaeAkira/raphael-rs",
+                                "https://github.com/Asvel/ffxiv-raphael-mod",
                             )
                             .open_in_new_tab(true),
                         );
                         ui.label("/");
                         ui.add(
                             egui::Hyperlink::from_label_and_url(
-                                t!(locale, "Join Discord"),
-                                "https://discord.com/invite/m2aCy3y8he",
-                            )
-                            .open_in_new_tab(true),
-                        );
-                        ui.label("/");
-                        ui.add(
-                            egui::Hyperlink::from_label_and_url(
-                                t!(locale, "Support me on Ko-fi"),
+                                t!(locale, "Support mainline author on Ko-fi"),
                                 "https://ko-fi.com/konaeakira",
                             )
                             .open_in_new_tab(true),
@@ -397,7 +395,8 @@ impl eframe::App for MacroSolverApp {
             ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 3.0);
             ui.add(SavedRotationsWidget::new(
                 &mut self.app_context,
-                self.solve_state.actions_mut(),
+                &mut self.solve_state.actions,
+                &mut self.solve_state.minimum_stats,
             ));
         });
     }
@@ -408,6 +407,15 @@ impl eframe::App for MacroSolverApp {
 
     fn auto_save_interval(&self) -> std::time::Duration {
         std::time::Duration::from_secs(1)
+    }
+
+    fn persist_egui_memory(&self) -> bool {
+        // pause egui states saving to keep storage unchanged, to skip storage file rewriting,
+        // to avoid most unwanted SAVED_ROTATIONS overwriting under multiple app instances
+        match self.main_window_focused_at {
+            Some(time) => time.elapsed().as_secs() >= 3,
+            None => false,
+        }
     }
 }
 
@@ -526,7 +534,7 @@ impl MacroSolverApp {
     }
 
     fn draw_simulator_widget(&mut self, ui: &mut egui::Ui) {
-        ui.add(Simulator::new(&self.app_context, &self.solve_state));
+        ui.add(Simulator::new(&mut self.app_context, &self.solve_state));
     }
 
     fn draw_list_select_widgets(&mut self, ui: &mut egui::Ui) {
@@ -607,6 +615,12 @@ impl MacroSolverApp {
                     [0, 1, 2, 3, 4, 5, 6, 7],
                     |job_id: u8| get_job_name(job_id, locale),
                 ));
+                if ui.add_enabled(
+                    self.app_context.crafter_config.is_detached(),
+                    egui::Button::new(egui::RichText::from("↙").size(14.0))
+                ).clicked() {
+                    self.app_context.crafter_config.reset_to_job();
+                }
             });
         });
         ui.separator();
@@ -829,11 +843,13 @@ impl MacroSolverApp {
                 );
                 ui.add(egui::Hyperlink::from_label_and_url(
                     egui::RichText::new(t!(locale, "Download latest release from GitHub")).small(),
-                    "https://github.com/KonaeAkira/raphael-rs/releases/latest",
+                    "https://github.com/Asvel/ffxiv-raphael-mod/releases/latest",
                 ));
             }
         }
         ui.separator();
+
+        self.app_context.crafter_config.detach_from_job_if_changed();
 
         ui.label(egui::RichText::new(t!(locale, "Solver settings")).strong());
         ui.horizontal(|ui| {
@@ -958,5 +974,90 @@ impl MacroSolverApp {
             locale,
             "⚠ EXPERIMENTAL FEATURE\nMay crash the solver due to reaching the 4GB memory limit of 32-bit web assembly, causing the UI to get stuck in the \"solving\" state indefinitely."
         );
+    }
+
+    fn set_window_title(&self, ui: &egui::Ui) {
+        let egui_id_current = egui::Id::new("title_item");
+        let current_item_id = self.app_context.recipe_config.recipe().item_id;
+        if ui.data(|data| data.get_temp(egui_id_current)) != Some(current_item_id) {
+            ui.data_mut(|data| data.insert_temp(egui_id_current, current_item_id));
+            ui.send_viewport_cmd(egui::ViewportCommand::Title(
+                match raphael_data::get_raw_item_name(current_item_id, self.app_context.locale) {
+                    Some(item_name) => format!("{item_name} - Raphael XIV"),
+                    None => "Raphael XIV".to_owned(),
+                }
+            ));
+        }
+    }
+
+    fn process_storage_syncing(&mut self, ui: &egui::Ui, frame: &mut eframe::Frame) {
+        ui.input(|input| {
+            for event in input.raw.events.iter().rev() {
+                if let egui::Event::WindowFocused(focused) = event {
+                    if *focused {
+                        self.app_context.saved_rotations_sync_requests.push_back(None);
+                        self.main_window_focused_at = Some(std::time::Instant::now());
+                    } else {
+                        self.main_window_focused_at = None;
+                    }
+                    break;
+                }
+            }
+        });
+
+        #[cfg(not(target_arch = "wasm32"))]
+        // native storage caches values forever, we can only read it from file manually
+        let mut sync_saved_rotations = || {
+            match eframe::storage_dir("Raphael XIV Mod") {
+                Some(path) => {
+                    let uri = format!("file://{}", path.join("app.ron").to_str().unwrap());
+                    match ui.try_load_bytes(&uri) {
+                        Ok(egui::load::BytesPoll::Ready { bytes, .. }) => {
+                            type KV = std::collections::HashMap<String, String>;
+                            if let Ok(kv) = ron::de::from_bytes::<KV>(&bytes) {
+                                if let Some(value) = kv.get("SAVED_ROTATIONS") {
+                                    if let Ok(value) = ron::de::from_str(value) {
+                                        self.app_context.saved_rotations_data = value;
+                                    }
+                                }
+                            }
+                            for loader in ui.loaders().bytes.lock().iter() {
+                                loader.forget(&uri);
+                            }
+                            true
+                        },
+                        _ => false,  // waiting file IO
+                    }
+                },
+                None => true,  // no storage, continue subsequent operations as success
+            }
+        };
+        #[cfg(target_arch = "wasm32")]
+        // web storage retrieves value from browser directly
+        let mut sync_saved_rotations = || {
+            if let Some(storage) = frame.storage() {
+                if let Some(value) = eframe::get_value(storage, "SAVED_ROTATIONS") {
+                    self.saved_rotations_data = value;
+                }
+            }
+            true
+        };
+
+        if self.app_context.saved_rotations_sync_requests.len() > 0 && sync_saved_rotations() {
+            let mut changed = false;
+            while let Some(request) = self.app_context.saved_rotations_sync_requests.pop_front() {
+                if let Some(rotation) = request {
+                    self.app_context.saved_rotations_data.add_solved_rotation(
+                        rotation,
+                        &self.app_context.saved_rotations_config,
+                    );
+                    changed = true;
+                }
+            }
+            if changed && let Some(storage) = frame.storage_mut() {
+                self.app_context.save(storage);
+                storage.flush();
+            }
+        }
     }
 }

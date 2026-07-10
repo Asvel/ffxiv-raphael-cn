@@ -357,6 +357,14 @@ fn create_macros(
     actions: &[Action],
     newline: &str,
 ) -> Vec<String> {
+    let q = match context.locale {
+        Locale::JP | Locale::CN | Locale::TW => "",
+        _ => "\"",
+    };
+    let avoid_single_action_macro = config.notification_config.avoid_single_action_macro
+        || !config.notification_config.default_notification
+        && config.notification_config.different_last_notification
+        && config.notification_config.custom_last_notification_format.is_empty();
     let max_macro_len = if config.split_macro { 15 } else { usize::MAX };
     let mut macros = Vec::new();
     let mut current_macro = Vec::new();
@@ -373,18 +381,18 @@ fn create_macros(
         // Action
         if config.include_delay {
             current_macro.push(format!(
-                "/ac \"{}\" <wait.{}>",
+                "/ac {q}{}{q} <wait.{}>",
                 macro_name(*action, context.locale),
                 action.time_cost() + config.extra_delay
             ));
         } else {
-            current_macro.push(format!("/ac \"{}\"", macro_name(*action, context.locale)));
+            current_macro.push(format!("/ac {q}{}{q}", macro_name(*action, context.locale)));
         }
         // Macro outro
         if config.notification_enabled
             && current_macro.len() < max_macro_len // Has place for notification.
             && (current_macro.len() + 1 == max_macro_len || remaining_actions == 0) // Is end of macro.
-            && !(config.notification_config.avoid_single_action_macro && remaining_actions == 1)
+            && !(avoid_single_action_macro && remaining_actions == 1)
         {
             let notification_command = if config.notification_config.default_notification {
                 format!(
@@ -404,7 +412,9 @@ fn create_macros(
                     .custom_notification_format
                     .clone()
             };
-            current_macro.push(notification_command);
+            if !notification_command.is_empty() {
+                current_macro.push(notification_command);
+            }
         }
         if current_macro.len() >= max_macro_len || remaining_actions == 0 {
             macros.push(current_macro.join(newline));

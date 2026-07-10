@@ -14,11 +14,11 @@ fn add_font_to_definitions(
         .insert(name.to_string(), Arc::new(font_data));
 
     for font_family in font_families {
-        definitions
+        let family = definitions
             .families
             .get_mut(font_family)
-            .unwrap()
-            .push(name.to_string());
+            .unwrap();
+        family.insert(family.len() - 2, name.to_string());
     }
 }
 
@@ -41,16 +41,16 @@ fn try_load_additional_font_data(_ctx: &egui::Context, locale: Locale) -> Option
     match locale {
         Locale::EN | Locale::DE | Locale::FR => None,
         Locale::JP => Some(FontData::from_static(include_bytes!(
-            "../assets/fonts/Noto_Sans_JP/static/NotoSansJP-Regular.ttf"
+            "../assets/fonts/Noto_Sans_JP/subset.ttf"
         ))),
         Locale::CN => Some(FontData::from_static(include_bytes!(
-            "../assets/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf"
+            "../assets/fonts/Noto_Sans_SC/subset.ttf"
         ))),
         Locale::KR => Some(FontData::from_static(include_bytes!(
-            "../assets/fonts/Noto_Sans_KR/static/NotoSansKR-Regular.ttf"
+            "../assets/fonts/Noto_Sans_KR/subset.ttf"
         ))),
         Locale::TW => Some(FontData::from_static(include_bytes!(
-            "../assets/fonts/Noto_Sans_TC/static/NotoSansTC-Regular.ttf"
+            "../assets/fonts/Noto_Sans_TC/subset.ttf"
         ))),
     }
 }
@@ -61,19 +61,19 @@ fn try_load_additional_font_data(ctx: &egui::Context, locale: Locale) -> Option<
         Locale::EN | Locale::DE | Locale::FR => return None,
         Locale::JP => concat!(
             env!("BASE_URL"),
-            "/fonts/Noto_Sans_JP/static/NotoSansJP-Regular.ttf"
+            "/fonts/Noto_Sans_JP/subset.ttf"
         ),
         Locale::CN => concat!(
             env!("BASE_URL"),
-            "/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf"
+            "/fonts/Noto_Sans_SC/subset.ttf"
         ),
         Locale::KR => concat!(
             env!("BASE_URL"),
-            "/fonts/Noto_Sans_KR/static/NotoSansKR-Regular.ttf"
+            "/fonts/Noto_Sans_KR/subset.ttf"
         ),
         Locale::TW => concat!(
             env!("BASE_URL"),
-            "/fonts/Noto_Sans_TC/static/NotoSansTC-Regular.ttf"
+            "/fonts/Noto_Sans_TC/subset.ttf"
         ),
     };
 
@@ -116,7 +116,12 @@ impl FontLoadingState {
                         unreachable!();
                     }
                     Locale::JP | Locale::CN | Locale::KR | Locale::TW => {
-                        try_load_additional_font_data(ctx, locale)
+                        try_load_additional_font_data(ctx, locale).map(|font|
+                            font.tweak(egui::FontTweak {
+                                y_offset_factor: -0.05,
+                                ..Default::default()
+                            })
+                        )
                     }
                 }) else {
                     if initial_load {

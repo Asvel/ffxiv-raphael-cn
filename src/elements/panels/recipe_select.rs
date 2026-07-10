@@ -94,15 +94,35 @@ impl<'a> RecipeSelect<'a> {
 
     fn select_normal_recipe(&mut self, recipe_id: u32, recipe: Recipe) {
         self.crafter_config.selected_job = recipe.job_id;
+        let current_recipe = self.recipe_config.recipe();
+        if current_recipe.quality_factor != recipe.quality_factor
+            || current_recipe.recipe_level != recipe.recipe_level
+        {
+            self.solver_config.quality_target = crate::config::QualityTarget::default();
+        }
         let recipe_source = RecipeSource::Normal {
             id: recipe_id,
             data: recipe,
         };
+        let stellar_mission_id = raphael_data::RECIPE_TO_STELLAR_MISSION_LINKS.get(recipe_id);
         *self.recipe_config = RecipeConfiguration {
             recipe_source,
-            quality_source: QualitySource::HqMaterialList([0; 6]),
+            quality_source: QualitySource::HqMaterialList(
+                if stellar_mission_id.is_some() {
+                    recipe.ingredients.map(|ingredient| ingredient.amount as u8)
+                } else {
+                    [0; 6]
+                }
+            ),
         };
-        self.solver_config.stellar_steady_hand_charges = 0;
+        self.solver_config.stellar_steady_hand_charges =
+            match stellar_mission_id.map(|id| {
+                raphael_data::STELLAR_MISSIONS[*id].stellar_steady_hand_charges
+            }) {
+                None => 0,
+                Some(0) => 0,
+                _ => 1,
+            };
     }
 
     fn draw_normal_recipe_select(&mut self, ui: &mut egui::Ui) {
@@ -147,7 +167,7 @@ impl<'a> RecipeSelect<'a> {
 
         match search_domain {
             SearchDomain::Recipes => {
-                let search_result = ui.ctx().memory_mut(|mem| {
+                let mut search_result = ui.ctx().memory_mut(|mem| {
                     mem.caches
                         .cache::<RecipeSearchCache<'_>>()
                         .get(RecipeSearchQuery {
@@ -157,6 +177,13 @@ impl<'a> RecipeSelect<'a> {
                         })
                         .clone()
                 });
+                if !search_text.is_empty() {
+                    let mut other_job: Vec<_> = search_result.extract_if(.., |(recipe_id, _)| {
+                        raphael_data::RECIPES.get(*recipe_id).unwrap().job_id
+                            != self.crafter_config.selected_job
+                    }).collect();
+                    search_result.append(&mut other_job);
+                }
                 self.draw_recipe_select_table(ui, search_result);
             }
             SearchDomain::StellarMissions => {
@@ -217,7 +244,7 @@ impl<'a> RecipeSelect<'a> {
                     ui.label(get_job_name(recipe.job_id, locale));
                 });
                 row.col(|ui| {
-                    ui.add(GameDataNameLabel::new(recipe, locale));
+                    ui.add(GameDataNameLabel::from_recipe(recipe, locale));
                 });
             });
         });
@@ -286,7 +313,7 @@ impl<'a> RecipeSelect<'a> {
                                 if ui.button(t!(locale, "Select")).clicked() {
                                     self.select_normal_recipe(*recipe_id, *recipe);
                                 }
-                                ui.add(GameDataNameLabel::new(recipe, locale));
+                                ui.add(GameDataNameLabel::from_recipe(recipe, locale));
                                 ui.allocate_space(ui.available_size());
                             });
                         });
@@ -572,7 +599,7 @@ impl Widget for RecipeSelect<'_> {
                 ui.horizontal(|ui| {
                     collapse_persisted(ui, Id::new("RECIPE_SEARCH_COLLAPSED"), &mut collapsed);
                     ui.label(egui::RichText::new(t!(locale, "Recipe")).strong());
-                    ui.add(GameDataNameLabel::new(self.recipe_config.recipe(), locale));
+                    ui.add(GameDataNameLabel::from_recipe(self.recipe_config.recipe(), locale));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui
                             .checkbox(

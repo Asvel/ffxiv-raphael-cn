@@ -56,6 +56,16 @@ fn preprocess_pattern(pattern: &str) -> String {
 
 pub type RecipeSearchEntry = (u32, &'static crate::Recipe);
 pub fn find_recipes(query: RecipeSearchQuery) -> impl Iterator<Item = RecipeSearchEntry> {
+    let matches = if query.text.starts_with(|c: char| c.is_ascii_digit()) {
+        RECIPES.entries().filter_map(|(recipe_id, recipe)| {
+            crate::get_recipe_name(&recipe, query.locale)?
+                .contains(query.text)
+                .then(|| (MatcherCandidate {
+                    haystack: "",
+                    associated_data: (recipe_id, recipe),
+                }, 0))
+        }).collect::<Vec<_>>()
+    } else {
     let pattern = Pattern::parse(
         &preprocess_pattern(query.text),
         CaseMatching::Ignore,
@@ -71,7 +81,7 @@ pub fn find_recipes(query: RecipeSearchQuery) -> impl Iterator<Item = RecipeSear
                 associated_data: (recipe_id, recipe),
             })
         });
-    let matches = pattern.match_list(entries, MATCHER.lock().as_mut().unwrap());
+    pattern.match_list(entries, MATCHER.lock().as_mut().unwrap()) };
     matches
         .into_iter()
         .map(|(entry, _score)| entry.associated_data)

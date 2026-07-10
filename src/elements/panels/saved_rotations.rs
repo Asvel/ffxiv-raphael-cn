@@ -12,7 +12,7 @@ use crate::{
     config::{CrafterConfig, QualitySource, RecipeConfiguration, RecipeSource},
     context::{AppContext, RecipeSearchState, SearchState, SolverConfig},
     elements::{util, widgets::collapse_temporary},
-    solve::{RunningSolveInfo, SolveParameters},
+    solve::{RunningSolveInfo, SolveParameters, MinimumStats},
 };
 
 fn generate_unique_rotation_id() -> u64 {
@@ -77,14 +77,23 @@ pub struct Rotation {
     #[serde(default)]
     pub recipe_info: Option<RecipeInfo>,
     #[serde(default)]
+    pub quality_source: Option<QualitySource>,
+    #[serde(default)]
     pub solve_info: Option<SolveInfo>,
     pub food: Option<(u32, bool)>,
     pub potion: Option<(u32, bool)>,
     pub crafter_stats: CrafterStats,
+    #[serde(default)]
+    pub minimum_stats: MinimumStats,
 }
 
 impl Rotation {
-    pub fn new(info: &RunningSolveInfo, actions: Vec<Action>, locale: Locale) -> Self {
+    pub fn new(
+        info: &RunningSolveInfo,
+        actions: Vec<Action>,
+        minimum_stats: MinimumStats,
+        locale: Locale,
+    ) -> Self {
         let RunningSolveInfo {
             solve_params:
                 SolveParameters {
@@ -118,6 +127,7 @@ impl Rotation {
             solver: solver_params,
             actions,
             recipe_info: Some(RecipeInfo::from(&recipe_config.recipe_source)),
+            quality_source: Some(recipe_config.quality_source),
             solve_info: Some(SolveInfo::new(
                 game_settings,
                 *initial_quality,
@@ -126,6 +136,7 @@ impl Rotation {
             food: food.map(|consumable| (consumable.item_id, consumable.hq)),
             potion: potion.map(|consumable| (consumable.item_id, consumable.hq)),
             crafter_stats: *stats,
+            minimum_stats,
         }
     }
 }
@@ -138,10 +149,12 @@ impl Clone for Rotation {
             solver: self.solver.clone(),
             actions: self.actions.clone(),
             recipe_info: self.recipe_info.clone(),
+            quality_source: self.quality_source.clone(),
             solve_info: self.solve_info.clone(),
             food: self.food,
             potion: self.potion,
             crafter_stats: self.crafter_stats,
+            minimum_stats: self.minimum_stats,
         }
     }
 }
@@ -152,10 +165,12 @@ impl PartialEq for Rotation {
         self.solver == other.solver
             && self.actions == other.actions
             && self.recipe_info == other.recipe_info
+            && self.quality_source == other.quality_source
             && self.solve_info == other.solve_info
             && self.food == other.food
             && self.potion == other.potion
             && self.crafter_stats == other.crafter_stats
+            && self.minimum_stats == other.minimum_stats
     }
 }
 
@@ -165,6 +180,7 @@ pub enum LoadOperation {
     Rotation,
     RotationRecipe,
     RotationRecipeConsumables,
+    RotationRecipeConsumablesConfiguration,
 }
 
 struct LoadOperationDisplay {
@@ -190,6 +206,8 @@ impl std::fmt::Display for LoadOperationDisplay {
             LoadOperation::RotationRecipeConsumables => {
                 t!(locale, "Load rotation, recipe & consumables")
             }
+            LoadOperation::RotationRecipeConsumablesConfiguration =>
+                t!(locale, "Load rotation, recipe, consumables & configuration"),
         };
         write!(f, "{}", output_str)
     }
@@ -268,6 +286,7 @@ struct RotationWidget<'a> {
     deleted: &'a mut bool,
     rotation: &'a Rotation,
     actions: &'a mut Vec<Action>,
+    minimum_stats: &'a mut MinimumStats,
     show_custom_recipe_select: &'a mut bool,
     crafter_config: &'a mut CrafterConfig,
     solver_config: &'a mut SolverConfig,
@@ -294,6 +313,7 @@ impl<'a> RotationWidget<'a> {
         deleted: &'a mut bool,
         rotation: &'a Rotation,
         actions: &'a mut Vec<Action>,
+        minimum_stats: &'a mut MinimumStats,
     ) -> Self {
         Self {
             locale: limited_app_context.locale,
@@ -302,6 +322,7 @@ impl<'a> RotationWidget<'a> {
             deleted,
             rotation,
             actions,
+            minimum_stats,
             show_custom_recipe_select: limited_app_context.show_custom_recipe_select,
             crafter_config: limited_app_context.crafter_config,
             solver_config: limited_app_context.solver_config,
@@ -319,7 +340,16 @@ impl<'a> RotationWidget<'a> {
         let locale = self.locale;
         ui.horizontal(|ui| {
             collapse_temporary(ui, self.id_salt("collapsed").into(), collapsed);
-            ui.label(egui::RichText::new(&self.rotation.name).strong());
+            ui.label(egui::RichText::new(
+                match &self.rotation.recipe_info {
+                    Some(RecipeInfo::NormalRecipe(recipe_id)) => {
+                        raphael_data::RECIPES.get(*recipe_id).and_then(|recipe| {
+                            raphael_data::get_recipe_name(recipe, self.locale)
+                        })
+                    }
+                    _ => None,
+                }.unwrap_or(self.rotation.name.clone())
+            ).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.add(egui::Button::new("🗑")).clicked() {
                     *self.deleted = true;
@@ -342,6 +372,7 @@ impl<'a> RotationWidget<'a> {
                         LoadOperation::Rotation,
                         LoadOperation::RotationRecipe,
                         LoadOperation::RotationRecipeConsumables,
+                        LoadOperation::RotationRecipeConsumablesConfiguration,
                     ] {
                         let text = format!("{}", saved_rotation_load_operation.display(locale));
                         if ui.button(text).clicked() {
@@ -369,15 +400,25 @@ impl<'a> RotationWidget<'a> {
                     match load_operation {
                         LoadOperation::Rotation => {
                             self.actions.clone_from(&self.rotation.actions);
+                            self.minimum_stats.clone_from(&self.rotation.minimum_stats);
                         }
                         LoadOperation::RotationRecipe => {
                             self.actions.clone_from(&self.rotation.actions);
+                            self.minimum_stats.clone_from(&self.rotation.minimum_stats);
                             self.load_saved_recipe();
                         }
                         LoadOperation::RotationRecipeConsumables => {
                             self.actions.clone_from(&self.rotation.actions);
+                            self.minimum_stats.clone_from(&self.rotation.minimum_stats);
                             self.load_saved_recipe();
                             self.load_saved_consumables();
+                        }
+                        LoadOperation::RotationRecipeConsumablesConfiguration => {
+                            self.actions.clone_from(&self.rotation.actions);
+                            self.minimum_stats.clone_from(&self.rotation.minimum_stats);
+                            self.load_saved_recipe();
+                            self.load_saved_consumables();
+                            self.load_saved_configuration();
                         }
                     }
                 }
@@ -392,6 +433,25 @@ impl<'a> RotationWidget<'a> {
                     "{steps} steps, {duration} seconds",
                     steps = self.rotation.actions.len(),
                 ));
+                if self.rotation.minimum_stats.cp.is_some() {
+                    ui.add_space(-5.0);
+                    let display = |stat: Option<u16>| -> String {
+                        match stat {
+                            Some(stat) => stat.to_string(),
+                            None => "----".to_owned(),
+                        }
+                    };
+                    ui.label(format!(
+                        "{}/{}/{},",
+                        display(self.rotation.minimum_stats.craftsmanship),
+                        display(self.rotation.minimum_stats.control),
+                        display(self.rotation.minimum_stats.cp),
+                    ));
+                }
+                if let Some(solve) = &self.rotation.solve_info && solve.initial_quality > 0 {
+                    ui.add_space(-5.0);
+                    ui.label(format!("+{},", solve.initial_quality));
+                }
             });
         });
     }
@@ -401,12 +461,13 @@ impl<'a> RotationWidget<'a> {
             match recipe_configuration {
                 RecipeInfo::NormalRecipe(recipe_id) => {
                     if let Some(recipe) = raphael_data::RECIPES.get(*recipe_id) {
-                        *self.recipe_config = RecipeConfiguration {
-                            recipe_source: RecipeSource::Normal {
-                                id: *recipe_id,
-                                data: *recipe,
-                            },
-                            quality_source: QualitySource::HqMaterialList([0; 6]),
+                        if self.recipe_config.recipe().item_id != recipe.item_id {
+                            self.recipe_config.quality_source =
+                                QualitySource::HqMaterialList([0; 6]);
+                        }
+                        self.recipe_config.recipe_source = RecipeSource::Normal {
+                            id: *recipe_id,
+                            data: *recipe,
                         };
                         self.crafter_config.selected_job = recipe.job_id;
                         self.solver_config.stellar_steady_hand_charges = 0;
@@ -429,6 +490,9 @@ impl<'a> RotationWidget<'a> {
                 }
             }
         }
+        if let Some(quality_source) = &self.rotation.quality_source {
+            self.recipe_config.quality_source = *quality_source;
+        }
     }
 
     fn load_saved_consumables(&mut self) {
@@ -444,6 +508,16 @@ impl<'a> RotationWidget<'a> {
                 .find(|potion| potion.item_id == item_id && potion.hq == hq)
                 .copied()
         });
+    }
+
+    fn load_saved_configuration(&mut self) {
+        if *self.crafter_config.active_stats() != self.rotation.crafter_stats {
+            self.crafter_config.detach_from_job();
+            *self.crafter_config.active_stats_mut() = self.rotation.crafter_stats;
+        }
+        if let Some(solve_info) = &self.rotation.solve_info {
+            *self.solver_config = solve_info.solver_config;
+        }
     }
 
     fn show_info_row(
@@ -503,7 +577,7 @@ impl<'a> RotationWidget<'a> {
             self.show_info_row(
                 ui,
                 t!(locale, "Recipe"),
-                raphael_data::get_item_name(recipe.item_id, false, locale)
+                raphael_data::get_recipe_name(recipe, locale)
                     .unwrap_or(t!(locale, "Unknown item").to_owned()),
                 max_key_width,
             );
@@ -580,13 +654,19 @@ impl egui::Widget for RotationWidget<'_> {
 pub struct SavedRotationsWidget<'a> {
     app_context: &'a mut AppContext,
     actions: &'a mut Vec<Action>,
+    minimum_stats: &'a mut MinimumStats,
 }
 
 impl<'a> SavedRotationsWidget<'a> {
-    pub fn new(app_context: &'a mut AppContext, actions: &'a mut Vec<Action>) -> Self {
+    pub fn new(
+        app_context: &'a mut AppContext,
+        actions: &'a mut Vec<Action>,
+        minimum_stats: &'a mut MinimumStats
+    ) -> Self {
         Self {
             app_context,
             actions,
+            minimum_stats,
         }
     }
 }
@@ -639,6 +719,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                         LoadOperation::Rotation,
                         LoadOperation::RotationRecipe,
                         LoadOperation::RotationRecipeConsumables,
+                        LoadOperation::RotationRecipeConsumablesConfiguration,
                     ] {
                         let text = format!("{}", saved_rotation_load_operation.display(*locale));
                         ui.selectable_value(
@@ -676,6 +757,7 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             &mut deleted,
                             rotation,
                             self.actions,
+                            self.minimum_stats,
                         ));
                         !deleted
                     });
@@ -723,8 +805,15 @@ impl egui::Widget for SavedRotationsWidget<'_> {
                             &mut deleted,
                             rotation,
                             self.actions,
+                            self.minimum_stats,
                         ));
                         if pinned {
+                            if rotation.recipe_info.is_some() {
+                                let mut item_same: Vec<_> = rotations.pinned
+                                    .extract_if(.., |r| r.recipe_info == rotation.recipe_info)
+                                    .collect();
+                                rotations.pinned.append(&mut item_same);
+                            }
                             rotations.pinned.push(rotation.clone());
                         }
                         !pinned && !deleted

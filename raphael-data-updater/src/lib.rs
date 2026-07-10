@@ -269,3 +269,6 @@ pub async fn fetch_and_parse<T: SheetData>(lang: Lang) -> Vec<T> {
         log::debug!("{} {lang:?}: Fetching ({} rows)", T::SHEET, rows.len());
     }
 }
+
+mod font;
+pub use font::generate_font_subset;

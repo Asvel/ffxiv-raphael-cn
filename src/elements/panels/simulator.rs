@@ -1,12 +1,14 @@
 use raphael_data::Locale;
+use raphael_data::{Recipe, Consumable};
 use raphael_sim::{Action, ActionError, Settings, SimulationState};
 use raphael_translations::{t, t_format};
 
 use crate::{
+    config::CrafterConfig,
     config::QualityTarget,
     context::AppContext,
     elements::{util, widgets::HelpText},
-    solve::{SolveParameters, SolveState},
+    solve::{SolveParameters, SolveState, MinimumStats},
 };
 
 pub struct Simulator<'a> {
@@ -16,6 +18,10 @@ pub struct Simulator<'a> {
     actions: &'a [Action],
     item_always_collectable: bool,
     config_changed: bool,
+    crafter_config: &'a mut CrafterConfig,
+    recipe: &'a Recipe,
+    consumables: [Option<Consumable>; 2],
+    minimum_stats: &'a MinimumStats,
     locale: Locale,
 }
 
@@ -27,16 +33,16 @@ fn config_changed(app_context: &AppContext, solve_state: &SolveState) -> bool {
 }
 
 impl<'a> Simulator<'a> {
-    pub fn new(app_context: &'a AppContext, solve_state: &'a SolveState) -> Self {
+    pub fn new(app_context: &'a mut AppContext, solve_state: &'a SolveState) -> Self {
         let config_changed = config_changed(app_context, solve_state);
+        let settings = app_context.game_settings();
+        let initial_quality = app_context.initial_quality();
         let AppContext {
             locale,
             recipe_config,
             crafter_config,
             ..
         } = app_context;
-        let settings = app_context.game_settings();
-        let initial_quality = app_context.initial_quality();
         let item_always_collectable = raphael_data::ITEMS
             .get(recipe_config.recipe().item_id)
             .map(|item| item.always_collectable)
@@ -49,12 +55,16 @@ impl<'a> Simulator<'a> {
             item_always_collectable,
             config_changed,
             locale: *locale,
+            crafter_config,
+            recipe: recipe_config.recipe(),
+            consumables: [app_context.selected_food, app_context.selected_potion],
+            minimum_stats: &solve_state.minimum_stats,
         }
     }
 }
 
 impl Simulator<'_> {
-    fn draw_simulation(&self, ui: &mut egui::Ui, state: &SimulationState) {
+    fn draw_simulation(&mut self, ui: &mut egui::Ui, state: &SimulationState) {
         let locale = self.locale;
         ui.group(|ui| {
             ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 3.0);
@@ -94,11 +104,57 @@ impl Simulator<'_> {
                 let text_size = egui::vec2(max_text_width, ui.spacing().interact_size.y);
                 let text_layout = egui::Layout::right_to_left(egui::Align::Center);
 
+                let add_context_menu = |
+                    response: &egui::Response,
+                    minimum_stat: Option<u16>,
+                    req_stat: u16,
+                    calc_bonus: fn(u16, &[Option<Consumable>]) -> u16,
+                    config_stat: u16,
+                    set_config_stat: &mut dyn FnMut(u16),
+                | {
+                    if let Some(mut stat) = minimum_stat {
+                        response.interact(egui::Sense::click()).context_menu(|ui| {
+                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                ui.close();
+                            }
+                            if ui.button(t_format!(locale, "Copy {stat}")).clicked() {
+                                ui.ctx().copy_text(stat.to_string());
+                                ui.close();
+                            }
+                            if stat < req_stat {
+                                if ui.button(t_format!(locale, "Copy {req_stat}")).clicked() {
+                                    ui.ctx().copy_text(req_stat.to_string());
+                                    ui.close();
+                                }
+                                stat = req_stat;
+                            }
+                            // this will be incorrect if stat can't fulfill consumables,
+                            // but that situation is rarely encountered in practice
+                            let bonus = calc_bonus(stat, &self.consumables);
+                            let crafter_stat = stat.saturating_sub(bonus);
+                            if crafter_stat != stat {
+                                if ui.button(t_format!(locale, "Copy {crafter_stat}")).clicked() {
+                                    ui.ctx().copy_text(crafter_stat.to_string());
+                                    ui.close();
+                                }
+                            }
+                            if ui.add_enabled(
+                                config_stat != crafter_stat,
+                                egui::Button::new(t_format!(locale,
+                                    "Set crafter stat to {stat}")),
+                            ).clicked() {
+                                set_config_stat(crafter_stat);
+                                ui.close();
+                            }
+                        });
+                    }
+                };
+
                 ui.horizontal(|ui| {
                     ui.allocate_ui_with_layout(text_size, text_layout, |ui| {
                         ui.label(t!(locale, "Progress"));
                     });
-                    ui.add(
+                    let response = ui.add(
                         egui::ProgressBar::new(
                             state.progress as f32 / self.settings.max_progress as f32,
                         )
@@ -108,8 +164,22 @@ impl Simulator<'_> {
                             self.settings.max_progress,
                             max_value_text_width,
                             locale,
+                            self.minimum_stats.craftsmanship,
+                            self.recipe.req_craftsmanship,
+                            "Craftsmanship",
                         ))
                         .corner_radius(0),
+                    );
+                    add_context_menu(
+                        &response,
+                        self.minimum_stats.craftsmanship,
+                        self.recipe.req_craftsmanship,
+                        raphael_data::craftsmanship_bonus,
+                        self.crafter_config.active_stats().craftsmanship,
+                        &mut |stat| {
+                            self.crafter_config.detach_from_job();
+                            self.crafter_config.active_stats_mut().craftsmanship = stat;
+                        }
                     );
                 });
 
@@ -118,7 +188,7 @@ impl Simulator<'_> {
                         ui.label(t!(locale, "Quality"));
                     });
                     let quality = self.initial_quality.saturating_add(state.quality);
-                    ui.add(
+                    let response = ui.add(
                         egui::ProgressBar::new(quality as f32 / self.settings.max_quality as f32)
                             .text(progress_bar_text(
                                 ui,
@@ -126,8 +196,22 @@ impl Simulator<'_> {
                                 self.settings.max_quality,
                                 max_value_text_width,
                                 locale,
+                                self.minimum_stats.control,
+                                self.recipe.req_control,
+                                "Control",
                             ))
                             .corner_radius(0),
+                    );
+                    add_context_menu(
+                        &response,
+                        self.minimum_stats.control,
+                        self.recipe.req_control,
+                        raphael_data::control_bonus,
+                        self.crafter_config.active_stats().control,
+                        &mut |stat| {
+                            self.crafter_config.detach_from_job();
+                            self.crafter_config.active_stats_mut().control = stat;
+                        }
                     );
                 });
 
@@ -145,6 +229,9 @@ impl Simulator<'_> {
                             self.settings.max_durability,
                             max_value_text_width,
                             locale,
+                            None,
+                            0,
+                            "",
                         ))
                         .corner_radius(0),
                     );
@@ -154,7 +241,7 @@ impl Simulator<'_> {
                     ui.allocate_ui_with_layout(text_size, text_layout, |ui| {
                         ui.label(t!(locale, "CP"));
                     });
-                    ui.add(
+                    let response = ui.add(
                         egui::ProgressBar::new(state.cp as f32 / self.settings.max_cp as f32)
                             .text(progress_bar_text(
                                 ui,
@@ -162,8 +249,22 @@ impl Simulator<'_> {
                                 self.settings.max_cp,
                                 max_value_text_width,
                                 locale,
+                                None,
+                                0,
+                                "",
                             ))
                             .corner_radius(0),
+                    );
+                    add_context_menu(
+                        &response,
+                        self.minimum_stats.cp,
+                        0,
+                        raphael_data::cp_bonus,
+                        self.crafter_config.active_stats().cp,
+                        &mut |stat| {
+                            self.crafter_config.detach_from_job();
+                            self.crafter_config.active_stats_mut().cp = stat;
+                        }
                     );
                 });
 
@@ -273,7 +374,7 @@ impl Simulator<'_> {
 }
 
 impl egui::Widget for Simulator<'_> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let (state, errors) =
             SimulationState::from_macro_continue_on_error(&self.settings, self.actions);
         ui.vertical(|ui| {
@@ -290,12 +391,16 @@ fn progress_bar_text<T: Copy + std::cmp::Ord + std::ops::Sub<Output = T> + std::
     maximum: T,
     max_value_text_width: f32,
     locale: Locale,
+    minimum_stat: Option<u16>,
+    required_stat: u16,
+    stat_name: &str,
 ) -> impl Into<egui::WidgetText> {
-    let text = if value > maximum {
-        let overflow = value - maximum;
-        t_format!(locale, "{value} / {maximum}  (+{overflow} overflow)")
-    } else {
-        format!("{} / {}", value, maximum)
+    let text = match minimum_stat {
+        Some(stat) => match stat >= required_stat {
+          true => format!("{value} / {maximum} ({stat_name} ≥{stat})"),
+          false => t_format!(locale, "{value: >5} / {maximum} ({stat_name} ≥{stat} theoretically, recipe requires {required_stat})"),
+        },
+        None => format!("{value} / {maximum}"),
     };
 
     let value_text_width = util::text_width(ui, value, egui::TextStyle::Body);
