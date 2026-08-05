@@ -1,6 +1,6 @@
 use egui::{
     Align, Id, Layout, Widget,
-    util::cache::{ComputerMut, FrameCache},
+    cache::{ComputerMut, FrameCache},
 };
 use egui_extras::Column;
 use raphael_data::{
@@ -343,7 +343,7 @@ impl<'a> RecipeSelect<'a> {
         ui.label(egui::RichText::new(t_format!(
             locale,
             "⚠ Patch {ffxiv_patch} recipes and items are already included. Only use custom recipes if you are an advanced user or if new recipes haven't been added yet.",
-            ffxiv_patch = "7.51"
+            ffxiv_patch = "7.55"
         )).small().color(ui.visuals().warn_fg_color));
         ui.separator();
         ui.horizontal_top(|ui| {
